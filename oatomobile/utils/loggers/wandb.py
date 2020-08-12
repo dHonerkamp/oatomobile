@@ -12,4 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Public API for `oatomobile.baselines.tf`."""
+"""Utilities for logging to Weights & Biases."""
+
+import wandb
+from absl import flags
+
+from oatomobile.utils.loggers import base
+
+wandb.init(project="oatomobile", config=flags.FLAGS)
+
+
+class WandBLogger(base.Logger):
+  """Logs to a `wandb` dashboard."""
+
+  def write(self, values: base.LoggingData) -> None:
+    wandb.log(values)

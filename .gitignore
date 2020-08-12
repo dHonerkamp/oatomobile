@@ -155,3 +155,6 @@ tmp
 data
 
 logs/
+
+# Configurations.
+Makefile

@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Logging helper functions for `TensorFlow` baselines."""
+"""Utility classes for logging on TensorBoard."""
 
 import os
 from typing import Optional
 
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import sonnet as snt
-import tensorflow as tf
+from torch.utils.tensorboard import SummaryWriter
 
-from oatomobile.baselines.tf.typing import ArrayLike
+from oatomobile.torch import types
 
 COLORS = [
     "#0071bc",
@@ -36,8 +34,8 @@ COLORS = [
 ]
 
 
-class TensorBoardWriter:
-  """A simple `TensorFlow`-friendly `TensorBoard` wrapper."""
+class TensorBoardLogger:
+  """A simple `Pytorch`-friendly `TensorBoard` wrapper."""
 
   def __init__(
       self,
@@ -51,29 +49,20 @@ class TensorBoardWriter:
     os.makedirs(log_dir_val, exist_ok=True)
 
     # Initialises the `TensorBoard` writters.
-    self._summary_writter_train = tf.summary.create_file_writer(log_dir_train)
-    self._summary_writter_val = tf.summary.create_file_writer(log_dir_val)
+    self._summary_writter_train = SummaryWriter(log_dir=log_dir_train)
+    self._summary_writter_val = SummaryWriter(log_dir=log_dir_val)
 
   def log(
       self,
       split: str,
       loss: float,
-      overhead_features: ArrayLike,
-      predictions: ArrayLike,
-      ground_truth: ArrayLike,
       global_step: int,
+      overhead_features: Optional[types.Array] = None,
+      predictions: Optional[types.Array] = None,
+      ground_truth: Optional[types.Array] = None,
   ) -> None:
     """Logs the scalar loss and visualizes predictions for qualitative
-    inspection.
-
-    Args:
-      split: One of {"train", "val"}, raises error otherwise.
-      loss: The optimization objective value.
-      overhead_features: The overhead visual input, e.g., LIDAR, with shape `[B, H, W, 3]`.
-      predictions: Samples from the model, with shape `[B, (K,) T, 2]`.
-      ground_truth: The ground truth plan, with shape `[B, T, 2]`.
-      global_step: The x-axis value.
-    """
+    inspection."""
 
     if split == "train":
       summary_writter = self._summary_writter_train
@@ -82,12 +71,19 @@ class TensorBoardWriter:
     else:
       raise ValueError("Unrecognised split={} was passed".format(split))
 
-    with summary_writter.as_default():
-      tf.summary.scalar("loss", data=loss, step=global_step)
+    # Logs the training loss.
+    summary_writter.add_scalar(
+        tag="loss",
+        scalar_value=loss,
+        global_step=global_step,
+    )
 
+    if overhead_features is not None:
       # Visualizes the predictions.
+      overhead_features = np.transpose(overhead_features,
+                                       (0, 2, 3, 1))  # to NHWC
       raw = list()
-      for t, (
+      for _, (
           o_t,
           p_t,
           g_t,
@@ -100,7 +96,7 @@ class TensorBoardWriter:
         bev_meters = 25.0
         # Overhead features.
         ax.imshow(
-            o_t.squeeze(),
+            o_t.squeeze()[..., 0],
             extent=(-bev_meters, bev_meters, bev_meters, -bev_meters),
             cmap="gray",
         )
@@ -121,7 +117,7 @@ class TensorBoardWriter:
             marker="o",
             markersize=4,
             color=COLORS[0],
-            alpha=1.0,
+            alpha=0.75,
             label="predictions",
         )
         ax.legend()
@@ -137,4 +133,9 @@ class TensorBoardWriter:
         raw.append(buf)
         plt.close(fig)
       raw = np.reshape(np.asarray(raw), (-1, w, h, 4))
-      tf.summary.image("examples", raw, max_outputs=16, step=global_step)
+      summary_writter.add_images(
+          tag="examples",
+          img_tensor=raw[..., :3],
+          global_step=global_step,
+          dataformats="NHWC",
+      )
