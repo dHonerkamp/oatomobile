@@ -367,6 +367,36 @@ class CARLADataset(Dataset):
       )
 
     # Draws first person camera-view.
+    if "semantic_lidar" in datum:
+      # TODO: untested
+      obs = datum["semantic_lidar"]
+      semantic, instance = obs[:, :, :3], obs[:, :, 3]
+
+      fig, ax = plt.subplots(figsize=(3.0, 3.0))
+      ax.imshow(instance.T)
+      ax.set(frame_on=False)
+      ax.get_xaxis().set_visible(False)
+      ax.get_yaxis().set_visible(False)
+      fig.savefig(
+          os.path.join(output_dir, "semantic_lidar_instance.png"),
+          bbox_inches="tight",
+          pad_inches=0,
+          transparent=True,
+      )
+
+      fig, ax = plt.subplots(figsize=(3.0, 3.0))
+      ax.imshow(np.transpose(semantic, [1, 0, 2]))
+      ax.set(frame_on=False)
+      ax.get_xaxis().set_visible(False)
+      ax.get_yaxis().set_visible(False)
+      fig.savefig(
+          os.path.join(output_dir, "semantic_lidar_semantic.png"),
+          bbox_inches="tight",
+          pad_inches=0,
+          transparent=True,
+      )
+
+    # Draws first person camera-view.
     if "front_camera_rgb" in datum:
       front_camera_rgb = datum["front_camera_rgb"]
       fig, ax = plt.subplots(figsize=(3.0, 3.0))
@@ -376,6 +406,34 @@ class CARLADataset(Dataset):
       ax.get_yaxis().set_visible(False)
       fig.savefig(
           os.path.join(output_dir, "front_camera_rgb.png"),
+          bbox_inches="tight",
+          pad_inches=0,
+          transparent=True,
+      )
+
+    if "front_camera_depth" in datum:
+      front_camera_depth = datum["front_camera_depth"]
+      fig, ax = plt.subplots(figsize=(3.0, 3.0))
+      ax.imshow(front_camera_depth)
+      ax.set(frame_on=False)
+      ax.get_xaxis().set_visible(False)
+      ax.get_yaxis().set_visible(False)
+      fig.savefig(
+          os.path.join(output_dir, "front_camera_depth.png"),
+          bbox_inches="tight",
+          pad_inches=0,
+          transparent=True,
+      )
+
+    if "front_camera_semantic" in datum:
+      front_camera_semantic = datum["front_camera_semantic"]
+      fig, ax = plt.subplots(figsize=(3.0, 3.0))
+      ax.imshow(front_camera_semantic)
+      ax.set(frame_on=False)
+      ax.get_xaxis().set_visible(False)
+      ax.get_yaxis().set_visible(False)
+      fig.savefig(
+          os.path.join(output_dir, "front_camera_semantic.png"),
           bbox_inches="tight",
           pad_inches=0,
           transparent=True,

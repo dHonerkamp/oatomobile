@@ -71,6 +71,9 @@ class CARLASensorTypes(simulator.SensorTypes):
   ACTORS_TRACKER = 21
   GOAL = 22
   PREDICTIONS = 23
+  FRONT_CAMERA_DEPTH = 24
+  FRONT_CAMERA_SEMANTIC = 25
+  SEMANTIC_LIDAR = 26
 
 
 class CameraSensor(simulator.Sensor, abc.ABC):
@@ -158,6 +161,106 @@ class CameraRGBSensor(CameraSensor):
       return self.observation_space.sample()
 
 
+class CameraDepthSensor(CameraSensor):
+  """Abstract class for CARLA RGB camera sensors."""
+
+  @staticmethod
+  def _spawn_sensor(
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      config: Optional[Mapping[str, str]] = None,
+  ) -> carla.ServerSideSensor:  # pylint: disable=no-member
+    """Spawns a camera on `hero`.
+
+    Args:
+      hero: The agent to attach the camera on.
+      config: The attribute-value pairs for the configuration
+        of the sensor.
+
+    Returns:
+      The spawned a camera sensor.
+    """
+    return cutil.spawn_camera(hero, config, camera_type="depth")
+
+  def get_observation(
+      self,
+      frame: int,
+      timeout: float,
+  ) -> np.ndarray:
+    """Finds the data point that matches the current `frame` id.
+
+    Args:
+      frame: The synchronous simulation time step ID.
+      timeout: The interval waited before stopping search
+        and raising a TimeoutError.
+
+    Returns:
+      A representation of the camera view.
+    """
+    try:
+      while True:
+        data = self.queue.get(timeout=timeout)
+        # Confirms synced frames.
+        if data.frame == frame:
+          break
+      # Processes the raw sensor data to a RGB array.
+      return cutil.carla_depth_image_to_ndarray(data)
+    except queue.Empty:
+      logging.debug(
+          "The queue of {} sensor was empty, returns a random observation".
+          format(self.uuid))
+      return self.observation_space.sample()
+
+
+class CameraSemanticSensor(CameraSensor):
+  """Abstract class for CARLA RGB camera sensors."""
+
+  @staticmethod
+  def _spawn_sensor(
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      config: Optional[Mapping[str, str]] = None,
+  ) -> carla.ServerSideSensor:  # pylint: disable=no-member
+    """Spawns a camera on `hero`.
+
+    Args:
+      hero: The agent to attach the camera on.
+      config: The attribute-value pairs for the configuration
+        of the sensor.
+
+    Returns:
+      The spawned a camera sensor.
+    """
+    return cutil.spawn_camera(hero, config, camera_type="semantic_segmentation")
+
+  def get_observation(
+      self,
+      frame: int,
+      timeout: float,
+  ) -> np.ndarray:
+    """Finds the data point that matches the current `frame` id.
+
+    Args:
+      frame: The synchronous simulation time step ID.
+      timeout: The interval waited before stopping search
+        and raising a TimeoutError.
+
+    Returns:
+      A representation of the camera view.
+    """
+    try:
+      while True:
+        data = self.queue.get(timeout=timeout)
+        # Confirms synced frames.
+        if data.frame == frame:
+          break
+      # Processes the raw sensor data to a RGB array.
+      return cutil.carla_cityscapes_image_to_ndarray(data)
+    except queue.Empty:
+      logging.debug(
+          "The queue of {} sensor was empty, returns a random observation".
+          format(self.uuid))
+      return self.observation_space.sample()
+
+
 class CameraCityScapesSensor(CameraSensor):
   """Abstract class for CARLA CityScapes camera sensors."""
 
@@ -227,6 +330,52 @@ class FrontCameraRGBSensor(CameraRGBSensor):
       *args,
       **kwargs) -> "FrontCameraRGBSensor":
     """Returns the default sensor."""
+    return cls(hero=hero, config=defaults.FRONT_CAMERA_RGB_SENSOR_CONFIG)
+
+
+@registry.register_sensor(name="front_camera_depth")
+class FrontCameraDepthSensor(CameraDepthSensor):
+  """Front camera view sensor."""
+
+  def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
+    """Returns the universal unique identifier of the sensor."""
+    return "front_camera_depth"
+
+  def _get_sensor_type(self, *args: Any, **kwargs: Any) -> CARLASensorTypes:
+    """Returns the the type of the sensor."""
+    return CARLASensorTypes.FRONT_CAMERA_DEPTH
+
+  @classmethod
+  def default(
+      cls,
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      *args,
+      **kwargs) -> "FrontCameraDepthSensor":
+    """Returns the default sensor."""
+    # use the same setup as rgb camera
+    return cls(hero=hero, config=defaults.FRONT_CAMERA_RGB_SENSOR_CONFIG)
+
+
+@registry.register_sensor(name="front_camera_semantic")
+class FrontCameraSemanticSensor(CameraSemanticSensor):
+  """Front camera view sensor."""
+
+  def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
+    """Returns the universal unique identifier of the sensor."""
+    return "front_camera_semantic"
+
+  def _get_sensor_type(self, *args: Any, **kwargs: Any) -> CARLASensorTypes:
+    """Returns the the type of the sensor."""
+    return CARLASensorTypes.FRONT_CAMERA_SEMANTIC
+
+  @classmethod
+  def default(
+      cls,
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      *args,
+      **kwargs) -> "FrontCameraSemanticSensor":
+    """Returns the default sensor."""
+    # use the same setup as rgb camera
     return cls(hero=hero, config=defaults.FRONT_CAMERA_RGB_SENSOR_CONFIG)
 
 
@@ -436,6 +585,139 @@ class LIDARSensor(simulator.Sensor):
       **kwargs) -> "LIDARSensor":
     """Returns the default sensor."""
     return cls(hero=hero, config=defaults.LIDAR_SENSOR_CONFIG)
+
+
+@registry.register_sensor(name="semantic_lidar")
+class SEMANTIC_LIDARSensor(simulator.Sensor):
+  """LIDAR, overhead sensor."""
+
+  def __init__(
+      self,
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      config: Mapping[str, str],
+      *args,
+      **kwargs) -> None:
+    """Constructs an overhead LIDAR sensor with a dedicated queue."""
+    super().__init__(*args, **kwargs)
+    self.config = config
+    self.sensor = self._spawn_sensor(hero, self.config)
+    self.queue = queue.Queue()
+    self.sensor.listen(self.queue.put)
+
+    # values of the rgb camera
+    camera_width, camera_height = 320, 180
+    self._disp_size = np.array([camera_width, camera_height])
+
+    # divide by depth to correct perspective, assuming points are already measured in camera coords
+    # https://www.scratchapixel.com/lessons/3d-basic-rendering/computing-pixel-coordinates-of-3d-point/mathematics-computing-2d-coordinates-of-3d-points
+    # fov = 90
+    # NOTE: DON'T KNOW WHY 60 IS THE CORRECT VALUE HERE AND NOT 90
+    fov = 60
+    angle_rad = np.deg2rad(fov / 2.0)
+
+    # s = 1.0 / np.tan(angle_rad)
+    # near, far = 0.0, 5000
+    # self._m = np.array([[s, 0, 0, 0],
+    #                     [0, -s, 0, 0],
+    #                     [0, 0, far / (far - near), 1],
+    #                     [0, 0, -(far * near) / (far - near), 0]])
+
+    near, far = 1.0, 5000
+    aspect = camera_width / camera_height
+    t = np.tan(angle_rad) * near
+    b = -t
+    r = t * aspect
+    l = -t * aspect
+    self._m = np.array([[2 * near / (r - l), 0, 0, 0],
+                        [0, -2 * near / (t - b), 0, 0],
+                        [(r + l) / (r - l), (t + b) / (t - b), far / (far - near), 1],
+                        [0, 0, -(2 * far * near) / (far - near), 0]])
+
+    self._semantic_camera = FrontCameraSemanticSensor.default(hero=hero)
+
+  def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
+    """Returns the universal unique identifier of the sensor."""
+    return "semantic_lidar"
+
+  def _get_sensor_type(self, *args: Any, **kwargs: Any) -> CARLASensorTypes:
+    """Returns the the type of the sensor."""
+    return CARLASensorTypes.SEMANTIC_LIDAR
+
+  @property
+  def observation_space(self, *args: Any, **kwargs: Any) -> gym.spaces.Box:
+    """Returns the observation spec of the sensor."""
+    # TODO
+    return gym.spaces.Box(
+        low=0.0,
+        high=1.0,
+        shape=(320, 180, 4),
+        dtype=np.float32,
+    )
+
+  @staticmethod
+  def _spawn_sensor(
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      config: Mapping[str, str],
+  ) -> carla.ServerSideSensor:  # pylint: disable=no-member
+    """Spawns LIDAR overhead sensor on `hero`.
+
+    Args:
+      hero: The agent to attach the LIDAR on.
+      config: The attribute-value pairs for the configuration
+        of the sensor.
+
+    Returns:
+      The spawned LIDAR overhead sensor.
+    """
+    return cutil.spawn_lidar(hero, config, semantic=True)
+
+  def get_observation(
+      self,
+      frame: int,
+      timeout: float,
+  ) -> np.ndarray:
+    """Finds the data point that matches the current `frame` id.
+
+    Args:
+      frame: The synchronous simulation time step ID.
+      timeout: The interval waited before stopping search
+        and raising a TimeoutError.
+
+    Returns:
+      An array representation of the LIDAR point cloud.
+    """
+    # (180, 320, 3) into (320, 180, 3)
+    semantic_camera_obs = self._semantic_camera.get_observation(frame=frame, timeout=timeout)
+    semantic_camera_obs = np.transpose(semantic_camera_obs, [1, 0, 2])
+
+    try:
+      while True:
+        data = self.queue.get(timeout=timeout)
+        # Confirms synced frames.
+        if data.frame == frame:
+          break
+      # Processes the raw sensor data to an instance mask. [320, 180]
+      instance_obs = cutil.carla_semantic_lidar_measurement_to_instance_ndarray(data, self._m, self._disp_size, semantic_camera_obs)
+      # [320, 180, 4]
+      return np.concatenate([semantic_camera_obs, instance_obs[:, :, np.newaxis]], axis=2)
+    except queue.Empty:
+      logging.debug(
+          "The queue of {} sensor was empty, returns a random observation".
+          format(self.uuid))
+      return self.observation_space.sample()
+
+  def close(self) -> None:
+    """Destroys the LIDAR sensor from the CARLA server."""
+    self.sensor.destroy()
+
+  @classmethod
+  def default(
+      cls,
+      hero: carla.ActorBlueprint,  # pylint: disable=no-member
+      *args,
+      **kwargs) -> "SEMANTIC_LIDARSensor":
+    """Returns the default sensor."""
+    return cls(hero=hero, config=defaults.SEMANTIC_LIDAR_SENSOR_CONFIG)
 
 
 @registry.register_sensor(name="control")
@@ -1721,7 +2003,7 @@ class CARLASimulator(simulator.Simulator):
     self._hero = cutil.spawn_hero(
         world=self._world,
         spawn_point=self.spawn_point,
-        vehicle_id="vehicle.ford.mustang",
+        vehicle_id="vehicle.mustang.mustang",
     )
     # Initializes the other vehicles.
     self._vehicles = cutil.spawn_vehicles(
@@ -1795,6 +2077,12 @@ class CARLASimulator(simulator.Simulator):
       if "front_camera_rgb" in self._observations:
         width = width + 320
         height = 180
+      if "front_camera_depth" in self._observations:
+        width = width + 320
+        height = 180
+      if "front_camera_semantic" in self._observations:
+        width = width + 320
+        height = 180
       if "rear_camera_rgb" in self._observations:
         width = width + 320
         height = 180
@@ -1804,6 +2092,9 @@ class CARLASimulator(simulator.Simulator):
       if "lidar" in self._observations:
         width = width + 200
         height = 200
+      if "semantic_lidar" in self._observations:
+        width = width + 320 + 320
+        height = 180
       if "bird_view_camera_rgb" in self._observations:
         width = width + 200
         height = 200
@@ -1841,7 +2132,8 @@ class CARLASimulator(simulator.Simulator):
     settings = self._world.get_settings()
     settings.synchronous_mode = False
     self._world.apply_settings(settings)
-    logging.debug("Closes the CARLA server with process PID {}".format(
-        self._server.pid))
-    os.killpg(self._server.pid, signal.SIGKILL)
-    atexit.unregister(lambda: os.killpg(self._server.pid, signal.SIGKILL))
+    if self._server is not None:
+      logging.debug("Closes the CARLA server with process PID {}".format(
+          self._server.pid))
+      os.killpg(self._server.pid, signal.SIGKILL)
+      atexit.unregister(lambda: os.killpg(self._server.pid, signal.SIGKILL))

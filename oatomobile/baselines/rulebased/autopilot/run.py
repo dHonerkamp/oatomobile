@@ -45,10 +45,13 @@ flags.DEFINE_list(
     name="sensors",
     default=[
         "velocity",
-        "bird_view_camera_cityscapes",
-        "bird_view_camera_rgb",
+        # "bird_view_camera_cityscapes",
+        # "bird_view_camera_rgb",
         "front_camera_rgb",
-        "lidar",
+        # "lidar",
+        "front_camera_depth",
+        # "front_camera_semantic",
+        "semantic_lidar"
     ],
     help="The list of recorded sensors.",
 )

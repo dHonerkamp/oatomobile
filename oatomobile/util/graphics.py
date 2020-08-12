@@ -86,6 +86,7 @@ def rgb_to_binary_mask(array: np.ndarray) -> np.ndarray:
 def ndarray_to_pygame_surface(
     array: np.ndarray,
     swapaxes: bool,
+    normalise: bool = True
 ) -> pygame.Surface:
   """Returns a `PyGame` surface from a `NumPy` array (image).
 
@@ -96,7 +97,10 @@ def ndarray_to_pygame_surface(
     A `PyGame` surface.
   """
   # Make sure its in 0-255 range.
-  array = 255 * (array / array.max())
+  if normalise:
+    array = 255 * (array / array.max())
+  else:
+    assert array.max() < 256
   if swapaxes:
     array = array.swapaxes(0, 1)
   return pygame.surfarray.make_surface(array)
@@ -226,6 +230,26 @@ def make_dashboard(display: pygame.Surface, font: pygame.font.Font,
     display.blit(ob_lidar_rgb, (ada_width, 0))
     ada_width = ada_width + ob_lidar_rgb.get_width()
 
+  if "semantic_lidar" in observations:
+    # Render overhead LIDAR reading.
+    # NOTE: this could fail if we have an actor id > 255
+    obs = observations.get("semantic_lidar")
+    semantic, instance = obs[:, :, :3], obs[:, :, 3]
+    # plot instance
+    ob_semantic_lidar_rgb = ndarray_to_pygame_surface(instance,
+        swapaxes=False,
+        normalise=False,
+    )
+    display.blit(ob_semantic_lidar_rgb, (ada_width, 0))
+    ada_width = ada_width + ob_semantic_lidar_rgb.get_width()
+    # plot semantic
+    ob_front_camera_semantic = ndarray_to_pygame_surface(
+        array=semantic,
+        swapaxes=False,
+    )
+    display.blit(ob_front_camera_semantic, (ada_width, 0))
+    ada_width = ada_width + ob_front_camera_semantic.get_width()
+
   if "left_camera_rgb" in observations:
     # Render left camera view.
     ob_left_camera_rgb_rgb = ndarray_to_pygame_surface(
@@ -243,6 +267,24 @@ def make_dashboard(display: pygame.Surface, font: pygame.font.Font,
     )
     display.blit(ob_front_camera_rgb_rgb, (ada_width, 0))
     ada_width = ada_width + ob_front_camera_rgb_rgb.get_width()
+
+  if "front_camera_depth" in observations:
+    # Render front camera view.
+    ob_front_camera_depth = ndarray_to_pygame_surface(
+        array=observations.get("front_camera_depth"),
+        swapaxes=True,
+    )
+    display.blit(ob_front_camera_depth, (ada_width, 0))
+    ada_width = ada_width + ob_front_camera_depth.get_width()
+
+  if "front_camera_semantic" in observations:
+    # Render front camera view.
+    ob_front_camera_semantic = ndarray_to_pygame_surface(
+        array=observations.get("front_camera_semantic"),
+        swapaxes=True,
+    )
+    display.blit(ob_front_camera_semantic, (ada_width, 0))
+    ada_width = ada_width + ob_front_camera_semantic.get_width()
 
   if "rear_camera_rgb" in observations:
     # Render rear camera view.

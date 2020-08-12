@@ -39,6 +39,38 @@ import numpy as np
 import transforms3d.euler
 from absl import logging
 
+import matplotlib.pyplot as plt
+# import cv2
+from skimage import measure
+from scipy import ndimage as nd
+
+LABEL_COLORS = np.array([
+    (0, 0, 0),       # None = 0
+    (70, 70, 70),    # Buildings = 1
+    (190, 153, 153), # Fences = 2
+    (250, 170, 160), # Other = 3
+    (220, 20, 60),   # Pedestrians = 4
+    (153, 153, 153), # Poles = 5
+    (157, 234, 50),  # RoadLines = 6
+    (128, 64, 128),  # Roads = 7
+    (244, 35, 232),  # Sidewalks = 8
+    (107, 142, 35),  # Vegetation = 9
+    (0, 0, 142),     # Vehicles = 10
+    (102, 102, 156), # Walls = 11
+    (220, 220, 0),   # TrafficSigns = 12
+    (70, 130, 180),  # sky = 13u,
+    (81, 0, 81),     # ground = 14u,
+    (150, 100, 100), # bridge = 15u,
+])
+
+# all colors above have a unique sum, use this to easier map bacl from rgb to index
+SEMANTIC_TO_SEGID_MAP = {sum(color): i for i, color in enumerate(LABEL_COLORS)}
+assert len(SEMANTIC_TO_SEGID_MAP) == len(LABEL_COLORS), "Color map no longer has unique sums!"
+# map all except cars and pedestrians to 0 (i.e. background)
+ignore = [0, 1, 2, 3, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15]
+for cls in ignore:
+    SEMANTIC_TO_SEGID_MAP[sum(LABEL_COLORS[cls])] = 0
+
 
 def setup(
     town: str,
@@ -149,6 +181,24 @@ def carla_rgb_image_to_ndarray(image: carla.Image) -> np.ndarray:  # pylint: dis
   return array
 
 
+def carla_depth_image_to_ndarray(image: carla.Image) -> np.ndarray:  # pylint: disable=no-member
+  """Returns a `NumPy` array from a `CARLA` RGB image.
+
+  Args:
+    image: The `CARLA` RGB image.
+
+  Returns:
+    A `NumPy` array representation of the image.
+  """
+  image.convert(carla.ColorConverter.Depth)  # pylint: disable=no-member
+  array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+  array = array.astype(np.float32) / 255
+  array = np.reshape(array, (image.height, image.width, 4))
+  array = array[:, :, :3]
+  array = array[:, :, ::-1]
+  return array
+
+
 def carla_cityscapes_image_to_ndarray(image: carla.Image) -> np.ndarray:  # pylint: disable=no-member
   """Returns a `NumPy` array from a `CARLA` semantic segmentation image.
 
@@ -239,6 +289,127 @@ def carla_lidar_measurement_to_ndarray(
 
   return features.astype(np.float32)
 
+
+def carla_semantic_lidar_measurement_to_instance_ndarray(
+    lidar_measurement: carla.LidarMeasurement,  # pylint: disable=no-member
+    m: np.ndarray,
+    disp_size: np.ndarray,
+    semantic_camera_obs: np.ndarray
+    ) -> np.ndarray:
+  """Returns a `NumPy` array from a `CARLA` LIDAR point cloud.
+
+  Args:
+    lidar_measurement: The `CARLA` LIDAR point cloud.
+
+  Returns:
+    A `NumPy` array representation of the point cloud.
+  """
+  # Serialise and parse to `NumPy` tensor.
+  points = np.frombuffer(lidar_measurement.raw_data, dtype=np.dtype([
+        ('x', np.float32), ('y', np.float32), ('z', np.float32),
+        ('CosAngle', np.float32), ('ObjIdx', np.uint32), ('ObjTag', np.uint32)]))
+
+  # transform into camera points. WE ASSUME THAT BOTH LIDAR AND CAMERA HAVE THE SAME POSE
+  # X is the axis parallel to the car, with range [-meters_max, meters_max] and the car at 0, i.e. the depth
+  # Y is perpendicular to the car [-meters_max, meters_max]
+  # Z is the height, looking downwards
+  # all units in meters
+
+  # get into x, y, depth order as it will be in the image. Add w=1 and transform
+  imgxydw = np.array([points['y'], points['z'], points['x'], np.ones(points['y'].shape)]).T
+  converted = imgxydw @ m
+  # drop w and normalise coordinates by w
+  converted = converted[:, :3] / converted[:, [3]]
+
+  # add actor id ([4]) or semantic tag ([5]) back to it
+  converted = np.concatenate([converted, points['ObjIdx'][:, np.newaxis], points['ObjTag'][:, np.newaxis]], axis=-1)
+
+  # somehow points from behind the camera can get mirrored into the front. So check again with the original depth values
+  converted = converted[points['x'] > 0]
+
+  # only select those that are within the canvas
+  converted = converted[(((converted[:, 0] >= -1) & (converted[:, 0] < 1))
+                        & ((converted[:, 1] >= -1) & (converted[:, 1] < 1))
+                        & (converted[:, 2] >= 0))]
+
+  # scale to screen
+  converted[:, :2] = converted[:, :2] * (disp_size - 1) / 2 + (disp_size - 1) / 2
+
+  # add onto canvas with semantic tag as value
+  canvas = np.zeros(disp_size, np.float)
+  canvas[tuple(converted[:, :2].astype(np.int).T)] = converted[:, 3]
+
+  # instance 0 seems to be stuff without any meaning
+  # instance_id_tag_mapping = converted[converted[:, 3] != 0]
+  # instance_id_tag_mapping = np.unique(instance_id_tag_mapping[:, [3, 4]], axis=0)
+  # print(instance_id_tag_mapping)
+
+  # post-processing
+  # 1. find connected components in semantic_camera_obs
+  # 2. nr. of object ids per connected component
+  # 3. if more than 1 object, assign all pixels in this component to the closest objectId
+
+  # map back from rgb colors to original semantic labels (those labels we didn't mark to ignore at top of this file)
+  semantic_camera_obs_1d = (255 * semantic_camera_obs.sum(2)).astype(np.int)
+  semantic_camera_obs_1d = np.vectorize(SEMANTIC_TO_SEGID_MAP.get)(semantic_camera_obs_1d)
+
+  def p(matrix, name='blub', overlay=False):
+    """debug helper"""
+    plt.imshow(matrix)
+    plt.savefig('tmp/{}'.format(name))
+    if overlay:
+        plt.imshow(canvas.T, alpha=0.7)
+    plt.close()
+
+  # cv2 seems to not take each value as its own component (just discriminating 0 vs non-zero). So use skimage.
+  # ncomponents, component_labels = cv2.connectedComponents(semantic_camera_obs_rescaled, connectivity=4)
+  component_labels, ncomponents = measure.label(semantic_camera_obs_1d, background=0, connectivity=2, return_num=True)
+
+  # TODO: MATCH THOSE WHERE SEMANTIC MASK AND INSTANCE MASK IS OF BY LIKE 1 PIXEL (I.E. WHERE IT DOESN'T FIND A CONNECTED COMPONENT MATCHING AN INSTANCE?
+  had_mult = False
+  for c in range(1, ncomponents + 1):  # 0 is background
+    mask = (component_labels == c)
+    instances = np.unique(canvas[mask])
+    # ignore background / unknown
+    instances = instances[instances != 0]
+    # print(c, instances, mask.sum())
+
+    l = len(instances)
+    if l == 0:
+        pass
+    elif l == 1:
+        # only one instance in this component, so assign all its pixels to this instance
+        canvas[mask] = instances[0]
+    else:
+      # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
+      # returns index of the closest background element (in this case background == (mask & has a objID)
+      missing = (mask & (canvas == 0))
+      ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+
+      # p(component_labels.T, 'components', True)
+      # p(missing.T, 'missing')
+      # p(mask.T, 'mask')
+
+      # assign the instance of the closest "background" pixel to the pixel
+      # p(canvas.T, 'pre')
+      canvas = canvas[tuple(ind)]
+      # p(canvas.T, 'post')
+      had_mult = True
+
+  # if had_mult:
+  #   p(canvas.T, 'postpost')
+
+
+  # potentially cheaper alternative if fov is always 90 and we don't care about scaled depth anyway
+  # get into x, y, depth order as it will be in the image
+  # imgxyd = points[:, [1, 2, 0]]
+  # # Z I think is looking downwards -> flip img_y. Or
+  # imgxyd[:, 1] = - imgxyd[:, 1]
+  # imgxyd = imgxyd / imgxyd[:, [2]]
+
+  # TODO: return both the original semantic_camera_obs and canvas (so as not to need another semantic camera). Maybe stacked in a single tensor
+  # TODO: what shape or color-scheme should instance masks be returned with? 1-hot?
+  return canvas
 
 def spawn_hero(
     world: carla.World,  # pylint: disable=no-member
@@ -358,7 +529,7 @@ def spawn_camera(
   Returns:
     The spawned  camera sensor.
   """
-  assert camera_type in ("rgb", "semantic_segmentation")
+  assert camera_type in ("rgb", "semantic_segmentation", "depth")
 
   # Get hero's world.
   world = hero.get_world()
@@ -382,6 +553,7 @@ def spawn_camera(
 def spawn_lidar(
     hero: carla.ActorBlueprint,  # pylint: disable=no-member
     config: Mapping[str, Any],
+    semantic=False
 ) -> carla.ServerSideSensor:  # pylint: disable=no-member
   """Spawns LIDAR sensor on `hero`.
 
@@ -398,7 +570,7 @@ def spawn_lidar(
   # Blueprints library.
   bl = world.get_blueprint_library()
   # Configure blueprint.
-  lidar_bp = bl.find("sensor.lidar.ray_cast")
+  lidar_bp = bl.find("sensor.lidar.ray_cast{}".format('_semantic' if semantic else ''))
   for attribute, value in config["attributes"].items():
     lidar_bp.set_attribute(attribute, value)
   logging.debug("Spawns a LIDAR sensor")

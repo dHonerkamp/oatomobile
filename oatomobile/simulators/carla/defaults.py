@@ -135,6 +135,28 @@ LIDAR_SENSOR_CONFIG = {
     },
 }
 
+# The LIDAR configuration.
+SEMANTIC_LIDAR_SENSOR_CONFIG = {
+    "attributes": {
+        # "channels": "64",
+        "range": "1000",
+        "points_per_second": str(SIMULATOR_FPS * 10000),
+        "rotation_frequency": str(SIMULATOR_FPS),
+        "upper_fov": "10",
+        "lower_fov": "-30",
+    },
+    "actor": {
+        "location": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.3,
+        },
+        "rotation": {
+            "pitch": 0,
+        }
+    },
+}
+
 # The goal sensor configuration.
 GOAL_SENSOR_CONFIG = {
     "num_goals": 10,
