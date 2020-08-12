@@ -153,3 +153,5 @@ tmp
 
 # Stored data.
 data
+
+logs/

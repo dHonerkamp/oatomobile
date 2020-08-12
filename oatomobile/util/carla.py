@@ -46,6 +46,7 @@ def setup(
     server_timestop: float = 20.0,
     client_timeout: float = 20.0,
     num_max_restarts: int = 5,
+    start_server: bool = False,
 ) -> Tuple[carla.Client, carla.World, int, subprocess.Popen]:  # pylint: disable=no-member
   """Returns the `CARLA` `server`, `client` and `world`.
 
@@ -74,26 +75,31 @@ def setup(
         attempts + 1, num_max_restarts))
 
     # Random assignment of port.
-    port = np.random.randint(2000, 3000)
+    # port = np.random.randint(2000, 3000)
+    port = 2000
 
     # Start CARLA server.
     env = os.environ.copy()
     env["SDL_VIDEODRIVER"] = "offscreen"
     env["SDL_HINT_CUDA_DEVICE"] = "0"
     logging.debug("Inits a CARLA server at port={}".format(port))
-    server = subprocess.Popen(
-        [
-            os.path.join(os.environ.get("CARLA_ROOT"), "CarlaUE4.sh"),
-            "-carla-rpc-port={}".format(port),
-            "-quality-level=Epic",
-        ],
-        stdout=None,
-        stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
-        env=env,
-    )
-    atexit.register(os.killpg, server.pid, signal.SIGKILL)
-    time.sleep(server_timestop)
+    if start_server:
+        server = subprocess.Popen(
+            [
+                os.path.join(os.environ.get("CARLA_ROOT"), "CarlaUE4.sh"),
+                "-carla-rpc-port={}".format(port),
+                "-quality-level=Epic",
+            ],
+            stdout=None,
+            stderr=subprocess.STDOUT,
+            preexec_fn=os.setsid,
+            env=env,
+        )
+        atexit.register(os.killpg, server.pid, signal.SIGKILL)
+        time.sleep(server_timestop)
+    else:
+        print("NOT STARTING A CARLA SERVER. PLEASE MANUALLY START IT OVER DOCKER BEFOREHAND.")
+        server = None
 
     # Connect client.
     logging.debug("Connects a CARLA client at port={}".format(port))
@@ -116,8 +122,9 @@ def setup(
       logging.debug(msg)
       attempts += 1
       logging.debug("Stopping CARLA server at port={}".format(port))
-      os.killpg(server.pid, signal.SIGKILL)
-      atexit.unregister(lambda: os.killpg(server.pid, signal.SIGKILL))
+      if server is not None:
+          os.killpg(server.pid, signal.SIGKILL)
+          atexit.unregister(lambda: os.killpg(server.pid, signal.SIGKILL))
 
   logging.debug(
       "Failed to connect to CARLA after {} attempts".format(num_max_restarts))
@@ -205,7 +212,9 @@ def carla_lidar_measurement_to_ndarray(
 
   # Serialise and parse to `NumPy` tensor.
   points = np.frombuffer(lidar_measurement.raw_data, dtype=np.dtype("f4"))
-  points = np.reshape(points, (int(points.shape[0] / 3), 3))
+  # NEW CARLA VERSION INCLUDES INTENSITY AS FOURTH CHANNEL. SHOULD WE USE IT FOR SMTH? (ATM JUST DROPPING FOR COMPATIBILITY WITH CODE)
+  points = np.reshape(points, (int(points.shape[0] / 4), 4))
+  points = points[:, :3]
 
   # Split observations in the Z dimension (height).
   below = points[points[..., 2] <= -2.5]
@@ -495,7 +504,7 @@ def get_actors(
   hero = spawn_hero(
       world=world,
       spawn_point=_spawn_point,
-      vehicle_id="vehicle.ford.mustang",
+      vehicle_id="vehicle.mustang.mustang",
   )
   # Other vehicles.
   vehicles = spawn_vehicles(

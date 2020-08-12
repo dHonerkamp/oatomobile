@@ -67,7 +67,16 @@ flags.DEFINE_bool(
     default=False,
     help="If True it spawn the `PyGame` display.",
 )
-
+flags.DEFINE_integer(
+    name="num_vehicles",
+    default=0,
+    help="Number of vehicles to spawn.",
+)
+flags.DEFINE_integer(
+    name="num_pedestrians",
+    default=0,
+    help="Number of pedestrians to spawn.",
+)
 
 def main(argv):
   # Debugging purposes.
@@ -81,35 +90,39 @@ def main(argv):
   output_dir = FLAGS.output_dir
   render = FLAGS.render
 
-  try:
-    # Setups the environment.
-    env = oatomobile.envs.CARLAEnv(
-        town=town,
-        fps=20,
-        sensors=sensors,
+  # try:
+  # Setups the environment.
+  env = oatomobile.envs.CARLAEnv(
+      town=town,
+      fps=20,
+      sensors=sensors,
+      num_vehicles=FLAGS.num_vehicles,
+      num_pedestrians=FLAGS.num_pedestrians,
+  )
+  if max_episode_steps is not None:
+    env = oatomobile.FiniteHorizonWrapper(
+        env,
+        max_episode_steps=max_episode_steps,
     )
-    if max_episode_steps is not None:
-      env = oatomobile.FiniteHorizonWrapper(
-          env,
-          max_episode_steps=max_episode_steps,
-      )
-    if output_dir is not None:
-      env = oatomobile.SaveToDiskWrapper(env, output_dir=output_dir)
+  if output_dir is not None:
+    env = oatomobile.SaveToDiskWrapper(env, output_dir=output_dir)
+
+    assert not render, "render=True and monitor wrapper won't work together because it will first initialise the pygame display with the wrong mode"
     env = oatomobile.MonitorWrapper(env, output_fname="tmp/yoo.gif")
 
-    # Runs the environment loop.
-    oatomobile.EnvironmentLoop(
-        agent_fn=AutopilotAgent,
-        environment=env,
-        render_mode="human" if render else "none",
-    ).run()
+  # Runs the environment loop.
+  oatomobile.EnvironmentLoop(
+      agent_fn=AutopilotAgent,
+      environment=env,
+      render_mode="human" if render else "none",
+  ).run()
 
-  finally:
-    # Garbage collector.
-    try:
-      env.close()
-    except NameError:
-      pass
+  # finally:
+  #   # Garbage collector.
+  #   try:
+  #     env.close()
+  #   except NameError:
+  #     pass
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@
 # ==============================================================================
 """Defines the core API for `gym.Env` and driving simulators."""
 
+import os
+from pathlib import Path
 import abc
 from typing import Any
 from typing import Callable
@@ -234,6 +236,7 @@ class MonitorWrapper(gym.Wrapper):
     # The parent directory to store the video.
     self._output_fname = output_fname
     self._downsample_factor = downsample_factor
+    os.makedirs(str(Path(self._output_fname).parent), exist_ok=True)
     self._recorder = imageio.get_writer(self._output_fname, mode="I")
 
   def reset(self, *args: Any, **kwargs: Any) -> Observations:

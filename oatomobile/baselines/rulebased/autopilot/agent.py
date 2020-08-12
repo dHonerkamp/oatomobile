@@ -200,12 +200,10 @@ class AutopilotAgent(oatomobile.Agent):
               target_vehicle_waypoint.lane_id != ego_vehicle_waypoint.lane_id:
         continue
 
-      loc = target_vehicle.get_location()
       if oatomobile.is_within_distance_ahead(
-          loc,
-          ego_vehicle_location,
-          self._vehicle.get_transform().rotation.yaw,
-          self._proximity_vehicle_threshold,
+          target_vehicle.get_transform(),
+          self._vehicle.get_transform(),
+          self._proximity_tlight_threshold,
       ):
         return (True, target_vehicle)
 
@@ -240,11 +238,9 @@ class AutopilotAgent(oatomobile.Agent):
               object_waypoint.lane_id != ego_vehicle_waypoint.lane_id:
         continue
 
-      loc = traffic_light.get_location()
       if oatomobile.is_within_distance_ahead(
-          loc,
-          ego_vehicle_location,
-          self._vehicle.get_transform().rotation.yaw,
+          traffic_light.get_transform(),
+          self._vehicle.get_transform(),
           self._proximity_tlight_threshold,
       ):
         if traffic_light.state == carla.TrafficLightState.Red:  # pylint: disable=no-member
