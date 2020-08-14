@@ -337,8 +337,9 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   converted[:, :2] = converted[:, :2] * (disp_size - 1) / 2 + (disp_size - 1) / 2
 
   # add onto canvas with semantic tag as value
-  canvas = np.zeros(disp_size, np.float)
-  canvas[tuple(converted[:, :2].astype(np.int).T)] = converted[:, 3]
+  canvas = np.zeros(list(disp_size) + [2], np.float)
+  canvas[tuple(converted[:, :2].astype(np.int).T)] = converted[:, [3, 4]]
+  canvas_instance, canvas_semantic = canvas[:, :, 0], canvas[:, :, 1]
 
   # instance 0 seems to be stuff without any meaning
   # instance_id_tag_mapping = converted[converted[:, 3] != 0]
@@ -356,61 +357,102 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
 
   def p(matrix, name='blub', overlay=False):
     """debug helper"""
-    plt.imshow(matrix)
-    plt.savefig('tmp/{}'.format(name))
     if overlay:
-        plt.imshow(canvas.T, alpha=0.7)
+        plt.imshow(np.transpose(semantic_camera_obs, [1, 0, 2]), alpha=0.7)
+    plt.imshow(matrix, alpha=0.5 if overlay else 1.0)
+    plt.savefig('tmp/{}'.format(name))
     plt.close()
 
-  # cv2 seems to not take each value as its own component (just discriminating 0 vs non-zero). So use skimage.
-  # ncomponents, component_labels = cv2.connectedComponents(semantic_camera_obs_rescaled, connectivity=4)
-  component_labels, ncomponents = measure.label(semantic_camera_obs_1d, background=0, connectivity=2, return_num=True)
+  # vec = np.reshape(np.stack([canvas, component_labels], axis=2), [-1, 2])
+  # # vec = vec[vec!=0]
+  # inst_component_pairs = np.unique(vec, axis=0)
+  # print(inst_component_pairs)
+  # comp_to_inst = {c: inst_component_pairs[(inst_component_pairs[:, 1] == c) & (inst_component_pairs[:, 0] != 0)][:, 0].tolist() for c in range(1, ncomponents + 1)}
+  # inst_to_comp = {i: inst_component_pairs[(inst_component_pairs[:, 0] == i) & (inst_component_pairs[:, 1] != 0)][:, 1].tolist() for i in np.unique(vec[:, 0]) if i}
 
-  # TODO: MATCH THOSE WHERE SEMANTIC MASK AND INSTANCE MASK IS OF BY LIKE 1 PIXEL (I.E. WHERE IT DOESN'T FIND A CONNECTED COMPONENT MATCHING AN INSTANCE?
-  had_mult = False
-  for c in range(1, ncomponents + 1):  # 0 is background
-    mask = (component_labels == c)
-    instances = np.unique(canvas[mask])
-    # ignore background / unknown
-    instances = instances[instances != 0]
-    # print(c, instances, mask.sum())
+  # Idea: assign to closest lidar point with same semantic tag
+  canvas_clean = np.zeros(disp_size, np.float)
+  for semantic_tag in np.unique(points['ObjTag']):
+      if semantic_tag in [4, 10]:
+        # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
+        # returns index of the closest background element (in this case background == (mask & has a objID)
+        missing = (canvas_semantic != semantic_tag)
+        ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+        # assign instance values
+        semantic_mask = (semantic_camera_obs_1d == semantic_tag)
+        canvas_clean[semantic_mask] = canvas_instance[tuple(ind)][semantic_mask]
 
-    l = len(instances)
-    if l == 0:
-        pass
-    elif l == 1:
-        # only one instance in this component, so assign all its pixels to this instance
-        canvas[mask] = instances[0]
-    else:
-      # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
-      # returns index of the closest background element (in this case background == (mask & has a objID)
-      missing = (mask & (canvas == 0))
-      ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+  return canvas_clean
 
-      # p(component_labels.T, 'components', True)
-      # p(missing.T, 'missing')
-      # p(mask.T, 'mask')
-
-      # assign the instance of the closest "background" pixel to the pixel
-      # p(canvas.T, 'pre')
-      canvas = canvas[tuple(ind)]
-      # p(canvas.T, 'post')
-      had_mult = True
-
-  # if had_mult:
-  #   p(canvas.T, 'postpost')
-
-
-  # potentially cheaper alternative if fov is always 90 and we don't care about scaled depth anyway
-  # get into x, y, depth order as it will be in the image
-  # imgxyd = points[:, [1, 2, 0]]
-  # # Z I think is looking downwards -> flip img_y. Or
-  # imgxyd[:, 1] = - imgxyd[:, 1]
-  # imgxyd = imgxyd / imgxyd[:, [2]]
-
-  # TODO: return both the original semantic_camera_obs and canvas (so as not to need another semantic camera). Maybe stacked in a single tensor
-  # TODO: what shape or color-scheme should instance masks be returned with? 1-hot?
-  return canvas
+  # p(canvas_clean.T, 'canvas2', True)
+  # p((canvas_clean).T, 'canvas3', False)
+  # p(np.zeros_like(canvas.T), 'canvas_semantic', True)
+  # p(canvas_instance.T, 'canvas', True)
+  # p((canvas_instance == 2).T, 'canvass', False)
+  #
+  # # cv2 seems to not take each value as its own component (just discriminating 0 vs non-zero). So use skimage.
+  # # ncomponents, component_labels = cv2.connectedComponents(semantic_camera_obs_rescaled, connectivity=4)
+  # component_labels, ncomponents = measure.label(semantic_camera_obs_1d, background=0, connectivity=2, return_num=True)
+  #
+  # # TODO: MATCH THOSE WHERE SEMANTIC MASK AND INSTANCE MASK IS OF BY LIKE 1 PIXEL (I.E. WHERE IT DOESN'T FIND A CONNECTED COMPONENT MATCHING AN INSTANCE?
+  # has_mult = []
+  # for c in range(1, ncomponents + 1):  # 0 is background
+  #   mask = (component_labels == c)
+  #   instances = np.unique(canvas[mask])
+  #   # ignore background / unknown
+  #   instances = instances[instances != 0]
+  #   # print(c, instances, mask.sum())
+  #
+  #   l = len(instances)
+  #   if l == 0:
+  #       pass
+  #   elif l == 1:
+  #       # only one instance in this component, so assign all its pixels to this instance
+  #       canvas[mask] = instances[0]
+  #   else:
+  #       # process in the end so we only need to compute some stuff if necessary
+  #       has_mult.append((c, mask))
+  #       # # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
+  #       # # returns index of the closest background element (in this case background == (mask & has a objID)
+  #       # missing = (mask & (canvas == 0))
+  #       # ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+  #       #
+  #       # # p(component_labels.T, 'components', True)
+  #       # # p(missing.T, 'missing')
+  #       # # p(mask.T, 'mask')
+  #       #
+  #       # # assign the instance of the closest "background" pixel to the pixel
+  #       # # p(canvas.T, 'pre')
+  #       # canvas = canvas[tuple(ind)]
+  #       # # p(canvas.T, 'post')
+  #
+  # if has_mult:
+  #     # TODO: only calculate this once, but also only if there is a case with multiple instances
+  #     # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
+  #     # returns index of the closest background element (in this case background == (mask & has a objID)
+  #     missing = (canvas == 0)
+  #     ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+  #
+  #     for c, mask in has_mult:
+  #         mask_combined = missing & mask
+  #         # assign the instance of the closest "background" pixel to the pixel
+  #         canvas[mask_combined] = canvas[tuple(ind)][mask_combined]
+  #
+  #
+  # # if has_mult:
+  # #   p(canvas.T, 'postpost')
+  # # p(canvas.T, 'blub3', True)
+  #
+  # # potentially cheaper alternative if fov is always 90 and we don't care about scaled depth anyway
+  # # get into x, y, depth order as it will be in the image
+  # # imgxyd = points[:, [1, 2, 0]]
+  # # # Z I think is looking downwards -> flip img_y. Or
+  # # imgxyd[:, 1] = - imgxyd[:, 1]
+  # # imgxyd = imgxyd / imgxyd[:, [2]]
+  #
+  # # TODO: return both the original semantic_camera_obs and canvas (so as not to need another semantic camera). Maybe stacked in a single tensor
+  # # TODO: what shape or color-scheme should instance masks be returned with? 1-hot?
+  # return canvas
 
 def spawn_hero(
     world: carla.World,  # pylint: disable=no-member
