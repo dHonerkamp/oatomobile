@@ -140,7 +140,7 @@ SEMANTIC_LIDAR_SENSOR_CONFIG = {
     "attributes": {
         # "channels": "64",
         "range": "1000",
-        "points_per_second": str(SIMULATOR_FPS * 10000),
+        "points_per_second": str(SIMULATOR_FPS * 100000),
         "rotation_frequency": str(SIMULATOR_FPS),
         "upper_fov": "10",
         "lower_fov": "-30",

@@ -26,6 +26,7 @@ from absl import logging
 
 import oatomobile
 from oatomobile.baselines.rulebased.autopilot.agent import AutopilotAgent
+from oatomobile.envs.carla import CARLAEnv
 
 logging.set_verbosity(logging.DEBUG)
 FLAGS = flags.FLAGS
@@ -95,7 +96,7 @@ def main(argv):
 
   # try:
   # Setups the environment.
-  env = oatomobile.envs.CARLAEnv(
+  env = CARLAEnv(
       town=town,
       fps=20,
       sensors=sensors,
