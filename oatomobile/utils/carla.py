@@ -149,6 +149,7 @@ def setup(
               synchronous_mode=True,
               fixed_delta_seconds=1.0 / fps,
           ))
+      print("Applied world settings: ", world.get_settings())
       logging.debug("Server version: {}".format(client.get_server_version()))
       logging.debug("Client version: {}".format(client.get_client_version()))
       return client, world, frame, server
@@ -296,7 +297,8 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
     lidar_measurement: carla.LidarMeasurement,  # pylint: disable=no-member
     m: np.ndarray,
     disp_size: np.ndarray,
-    semantic_camera_obs: np.ndarray
+    semantic_camera_obs: np.ndarray,
+    depth_camera_obs: np.ndarray,
     ) -> np.ndarray:
   """Returns a `NumPy` array from a `CARLA` LIDAR point cloud.
 
@@ -324,7 +326,7 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   converted = converted[:, :3] / converted[:, [3]]
 
   # add actor id ([4]) or semantic tag ([5]) back to it
-  converted = np.concatenate([converted, points['ObjIdx'][:, np.newaxis], points['ObjTag'][:, np.newaxis]], axis=-1)
+  converted = np.concatenate([converted, points['ObjIdx'][:, np.newaxis], points['ObjTag'][:, np.newaxis], points['x'][:, np.newaxis]], axis=-1)
 
   # somehow points from behind the camera can get mirrored into the front. So check again with the original depth values
   converted = converted[points['x'] > 0]
@@ -337,16 +339,25 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   # scale to screen
   converted[:, :2] = converted[:, :2] * (disp_size - 1) / 2 + (disp_size - 1) / 2
 
+
+  depth_size = 10
+  max_depth = 1000  # meters
+  # replace with a linear depth scaling so we can compare it with the values from the depth camera
+  converted[:, 2] = np.clip(converted[:, 5], 0, max_depth - 1) / (max_depth * depth_size)
+
   # add onto canvas with semantic tag as value
-  canvas = np.zeros(list(disp_size) + [2], np.float)
-  canvas[tuple(converted[:, :2].astype(np.int).T)] = converted[:, [3, 4]]
-  canvas_instance, canvas_semantic = canvas[:, :, 0], canvas[:, :, 1]
+  canvas = np.zeros(list(disp_size) + [depth_size, 2], np.float)
+  canvas[tuple(converted[:, :3].astype(np.int).T)] = converted[:, [3, 4]]
+  canvas_instance, canvas_semantic = np.split(canvas, 2, axis=-1)
+  canvas_instance, canvas_semantic = canvas_instance.squeeze(), canvas_semantic.squeeze()
 
   # instance 0 seems to be stuff without any meaning
-  # instance_id_tag_mapping = converted[converted[:, 3] != 0]
-  # instance_id_tag_mapping = np.unique(instance_id_tag_mapping[:, [3, 4]], axis=0)
-  # print(instance_id_tag_mapping)
-
+  # try:
+  #     instance_id_tag_mapping = converted[converted[:, 3] != 0]
+  #     instance_id_tag_mapping, counts = np.unique(instance_id_tag_mapping[:, [3, 4]], axis=0, return_counts=True)
+  #     print({tuple(t): c for t, c in zip(instance_id_tag_mapping, counts)})
+  # except:
+  #     pass
   # post-processing
   # 1. find connected components in semantic_camera_obs
   # 2. nr. of object ids per connected component
@@ -355,6 +366,10 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   # map back from rgb colors to original semantic labels (those labels we didn't mark to ignore at top of this file)
   semantic_camera_obs_1d = (255 * semantic_camera_obs.sum(2)).astype(np.int)
   semantic_camera_obs_1d = np.vectorize(SEMANTIC_TO_SEGID_MAP.get)(semantic_camera_obs_1d)
+
+  # https://carla.readthedocs.io/en/latest/ref_sensors/#depth-camera
+  # depth_normalized = depth_camera_obs[:, :, 0]
+  depth_idx = ((depth_size - 1) * depth_camera_obs[:, :, 0]).astype(np.int)
 
   def p(matrix, name='blub', overlay=False):
     """debug helper"""
@@ -378,19 +393,41 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
         # https://stackoverflow.com/questions/5551286/filling-gaps-in-a-numpy-array/9262129#9262129
         # returns index of the closest background element (in this case background == (mask & has a objID)
         missing = (canvas_semantic != semantic_tag)
-        ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True)
+        ind = nd.distance_transform_edt(missing, return_distances=False, return_indices=True, sampling=[1, 1, 10])
         # assign instance values
         semantic_mask = (semantic_camera_obs_1d == semantic_tag)
-        canvas_clean[semantic_mask] = canvas_instance[tuple(ind)][semantic_mask]
+
+        filled3D = canvas_instance[tuple(ind)]
+        twoD = np.take_along_axis(filled3D.reshape(-1, depth_size), depth_idx.reshape(-1, 1), axis=1).reshape(disp_size)
+        canvas_clean[semantic_mask] = twoD[semantic_mask]
+
+  # print(np.unique(canvas_clean))
 
   return canvas_clean
 
-  # p(canvas_clean.T, 'canvas2', True)
-  # p((canvas_clean).T, 'canvas3', False)
-  # p(np.zeros_like(canvas.T), 'canvas_semantic', True)
-  # p(canvas_instance.T, 'canvas', True)
-  # p((canvas_instance == 2).T, 'canvass', False)
-  #
+  print(np.unique(depth_idx[semantic_camera_obs_1d == 10], return_counts=True))
+  iii = np.tile(np.arange(depth_size)[np.newaxis, np.newaxis], [320, 180, 1])
+  print(np.unique(iii[canvas_semantic == 10], return_counts=True))
+
+  # np.histogram(iii[canvas_instance == 10])
+
+
+  p(depth_idx.T, 'blub', True)
+  p(filled3D[:, :, 4].T, 'canvas2', True)
+  p(twoD.T, 'canvas3', False)
+  p((canvas_instance[:, :, 14]).T, 'canvass', False)
+
+
+
+  p(canvas_clean.T, 'canvas', True)
+  p((canvas_clean == 43).T, 'canvas3', False)
+  p((depth_idx == 0).T, 'blub', True)
+  p((canvas_instance.sum(2) == 1).T, 'canvas', True)
+  p((canvas_instance == 5).T, 'canvass', False)
+
+  for i in range(25):
+      print(i, np.unique(filled3D[:, :, i]), np.unique(canvas_instance[:, :, i]))
+
   # # cv2 seems to not take each value as its own component (just discriminating 0 vs non-zero). So use skimage.
   # # ncomponents, component_labels = cv2.connectedComponents(semantic_camera_obs_rescaled, connectivity=4)
   # component_labels, ncomponents = measure.label(semantic_camera_obs_1d, background=0, connectivity=2, return_num=True)

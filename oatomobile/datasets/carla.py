@@ -382,7 +382,7 @@ class CARLADataset(Dataset):
     if "semantic_lidar" in datum:
       # TODO: untested
       obs = datum["semantic_lidar"]
-      semantic, instance = obs[:, :, :3], obs[:, :, 3]
+      semantic, instance, depth = obs[:, :, :3], obs[:, :, 3], obs[:, :, 4:]
 
       fig, ax = plt.subplots(figsize=(3.0, 3.0))
       ax.imshow(instance.T)
@@ -403,6 +403,18 @@ class CARLADataset(Dataset):
       ax.get_yaxis().set_visible(False)
       fig.savefig(
           os.path.join(output_dir, "semantic_lidar_semantic.png"),
+          bbox_inches="tight",
+          pad_inches=0,
+          transparent=True,
+      )
+
+      fig, ax = plt.subplots(figsize=(3.0, 3.0))
+      ax.imshow(np.transpose(depth, [1, 0, 2]))
+      ax.set(frame_on=False)
+      ax.get_xaxis().set_visible(False)
+      ax.get_yaxis().set_visible(False)
+      fig.savefig(
+          os.path.join(output_dir, "semantic_lidar_depth.png"),
           bbox_inches="tight",
           pad_inches=0,
           transparent=True,

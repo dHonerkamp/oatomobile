@@ -634,6 +634,7 @@ class SEMANTIC_LIDARSensor(simulator.Sensor):
                         [0, 0, -(2 * far * near) / (far - near), 0]])
 
     self._semantic_camera = FrontCameraSemanticSensor.default(hero=hero)
+    self._depth_camera = FrontCameraDepthSensor.default(hero=hero)
 
   def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
     """Returns the universal unique identifier of the sensor."""
@@ -650,7 +651,7 @@ class SEMANTIC_LIDARSensor(simulator.Sensor):
     return gym.spaces.Box(
         low=0.0,
         high=1.0,
-        shape=(320, 180, 4),
+        shape=(320, 180, 7),
         dtype=np.float32,
     )
 
@@ -690,6 +691,8 @@ class SEMANTIC_LIDARSensor(simulator.Sensor):
     semantic_camera_obs = self._semantic_camera.get_observation(frame=frame, timeout=timeout)
     semantic_camera_obs = np.transpose(semantic_camera_obs, [1, 0, 2])
 
+    depth_camera_obs = self._depth_camera.get_observation(frame=frame, timeout=timeout)
+    depth_camera_obs = np.transpose(depth_camera_obs, [1, 0, 2])
     try:
       while True:
         data = self.queue.get(timeout=timeout)
@@ -697,9 +700,9 @@ class SEMANTIC_LIDARSensor(simulator.Sensor):
         if data.frame == frame:
           break
       # Processes the raw sensor data to an instance mask. [320, 180]
-      instance_obs = cutil.carla_semantic_lidar_measurement_to_instance_ndarray(data, self._m, self._disp_size, semantic_camera_obs)
-      # [320, 180, 4]
-      return np.concatenate([semantic_camera_obs, instance_obs[:, :, np.newaxis]], axis=2)
+      instance_obs = cutil.carla_semantic_lidar_measurement_to_instance_ndarray(data, self._m, self._disp_size, semantic_camera_obs, depth_camera_obs)
+      # [320, 180, 7]
+      return np.concatenate([semantic_camera_obs, instance_obs[:, :, np.newaxis], depth_camera_obs], axis=2)
     except queue.Empty:
       logging.debug(
           "The queue of {} sensor was empty, returns a random observation".
@@ -709,6 +712,8 @@ class SEMANTIC_LIDARSensor(simulator.Sensor):
   def close(self) -> None:
     """Destroys the LIDAR sensor from the CARLA server."""
     self.sensor.destroy()
+    self._semantic_camera.close()
+    self._depth_camera.close()
 
   @classmethod
   def default(
@@ -2109,7 +2114,7 @@ class CARLASimulator(simulator.Simulator):
         width = width + 200
         height = 200
       if "semantic_lidar" in self._observations:
-        width = width + 320 + 320
+        width = width + 320 + 320 + 320
         height = 180
       if "bird_view_camera_rgb" in self._observations:
         width = width + 200

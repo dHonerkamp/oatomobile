@@ -50,7 +50,7 @@ flags.DEFINE_list(
         # "bird_view_camera_rgb",
         "front_camera_rgb",
         # "lidar",
-        "front_camera_depth",
+        # "front_camera_depth",
         # "front_camera_semantic",
         "semantic_lidar"
     ],

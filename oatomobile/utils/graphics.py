@@ -235,7 +235,7 @@ def make_dashboard(display: pygame.Surface, font: pygame.font.Font,
     # Render overhead LIDAR reading.
     # NOTE: this could fail if we have an actor id > 255
     obs = observations.get("semantic_lidar")
-    semantic, instance = obs[:, :, :3], obs[:, :, 3]
+    semantic, instance, depth = obs[:, :, :3], obs[:, :, 3], obs[:, :, 4:]
     # plot instance
     ob_semantic_lidar_rgb = ndarray_to_pygame_surface(instance,
         swapaxes=False,
@@ -243,6 +243,7 @@ def make_dashboard(display: pygame.Surface, font: pygame.font.Font,
     )
     display.blit(ob_semantic_lidar_rgb, (ada_width, 0))
     ada_width = ada_width + ob_semantic_lidar_rgb.get_width()
+
     # plot semantic
     ob_front_camera_semantic = ndarray_to_pygame_surface(
         array=semantic,
@@ -250,6 +251,14 @@ def make_dashboard(display: pygame.Surface, font: pygame.font.Font,
     )
     display.blit(ob_front_camera_semantic, (ada_width, 0))
     ada_width = ada_width + ob_front_camera_semantic.get_width()
+
+    # plot depth
+    ob_front_camera_depth = ndarray_to_pygame_surface(
+        array=depth,
+        swapaxes=False,
+    )
+    display.blit(ob_front_camera_depth, (ada_width, 0))
+    ada_width = ada_width + ob_front_camera_depth.get_width()
 
   if "left_camera_rgb" in observations:
     # Render left camera view.
