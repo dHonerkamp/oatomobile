@@ -181,6 +181,7 @@ class CARLADataset(Dataset):
           "actors_tracker",
       ),
       render: bool = False,
+      create_vid: bool =False,
   ) -> None:
     """Collects autopilot demonstrations for a single episode on CARLA.
 
@@ -204,7 +205,7 @@ class CARLADataset(Dataset):
     from oatomobile.baselines.rulebased.autopilot.agent import AutopilotAgent
     from oatomobile.core.loop import EnvironmentLoop
     from oatomobile.core.rl import FiniteHorizonWrapper
-    from oatomobile.core.rl import SaveToDiskWrapper
+    from oatomobile.core.rl import SaveToDiskWrapper, MonitorWrapper
     from oatomobile.envs.carla import CARLAEnv
     from oatomobile.envs.carla import TerminateOnCollisionWrapper
 
@@ -226,6 +227,11 @@ class CARLADataset(Dataset):
     env = SaveToDiskWrapper(env=env, output_dir=output_dir)
     # Caps environment's duration.
     env = FiniteHorizonWrapper(env=env, max_episode_steps=num_steps)
+
+    # TEST
+    if create_vid:
+        assert render is False, "Cannot use render and create vid atm"
+        env = MonitorWrapper(env, output_fname="{}/yoo.gif".format(output_dir))
 
     # Run a full episode.
     EnvironmentLoop(

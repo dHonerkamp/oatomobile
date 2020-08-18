@@ -2005,15 +2005,29 @@ class CARLASimulator(simulator.Simulator):
         spawn_point=self.spawn_point,
         vehicle_id="vehicle.mustang.mustang",
     )
+
+    # sometimes running into an error "std::out_of_range what():  _Map_base::at" without sleeping here
+    if self._num_vehicles or self._num_pedestrians:
+      # time.sleep(10)
+      sync = True
+      if not sync:
+        self._world.wait_for_tick()
+      else:
+        self._world.tick()
+
     # Initializes the other vehicles.
-    self._vehicles = cutil.spawn_vehicles(
+    self._vehicles = cutil.spawn_my_vehicles(
         world=self._world,
         num_vehicles=self._num_vehicles,
+        client=self._client,
+        safe=False,
+        car_lights_on=False,
     )
     # Initializes the pedestrians.
-    self._pedestrians = cutil.spawn_pedestrians(
+    self._pedestrians = cutil.spawn_moving_pedestrians(
         world=self._world,
         num_pedestrians=self._num_pedestrians,
+        client=self._client,
     )
     # Registers the sensors.
     self._sensor_suite = simulator.SensorSuite([
@@ -2022,6 +2036,8 @@ class CARLASimulator(simulator.Simulator):
             destination=self.destination,
         ) for sensor in self._sensors
     ])
+
+    print("Spawned {} vehicles and {} walkers".format(len(self._vehicles), len(self._pedestrians)))
 
     # HACK(filangel): due to the bug with the lifted vehicle and
     # the LocalPlanner, perform K=50 steps in the simulator.
