@@ -183,13 +183,14 @@ def get_args():
     parser.add_argument('--occ', type=str, default='busy_v0', choices=TownsConfig.occupancy.keys())
     parser.add_argument('-n', '--nepisodes', type=int, default=1)
     parser.add_argument('--num_steps', type=int, default=1000, help="Steps per episode")
+    parser.add_argument('--logdir', type=str, default='/home/honerkam/repos/oatomobile/logs/autopilot')
     args = parser.parse_args()
     return args
 
 
-def main(do_collect: bool, do_plot: bool, town: str, nepisodes, occupancy: str, num_steps: int):
+def main(do_collect: bool, do_plot: bool, town: str, nepisodes, occupancy: str, num_steps: int, logdir: str):
     now = datetime.datetime.now()
-    root = Path('/home/honerkam/repos/oatomobile/logs/autopilot') / (town + '_' + occupancy) / str(now)
+    root = Path(logdir) / (town + '_' + occupancy) / str(now)
 
     dataset_dir = root / 'raw'
     processed_dir = root / 'processed'
@@ -237,4 +238,5 @@ if __name__ == '__main__':
          town=args.town,
          nepisodes=args.nepisodes,
          occupancy=args.occ,
-         num_steps=args.num_steps)
+         num_steps=args.num_steps,
+         logdir=args.logdir)

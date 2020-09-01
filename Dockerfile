@@ -106,15 +106,16 @@ RUN easy_install PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg
 #####################
 # My Oatomobile
 #####################
-WORKDIR root
-ENV CARLA_ROOT=/root/carla
-RUN mkdir oatomobile
-COPY . oatomobile
-WORKDIR oatomobile
-RUN pip install oatomobile
-
 # other dependencies
 RUN pip install umsgpack
+
+WORKDIR /workspace
+ENV CARLA_ROOT=/workspace/carla
+RUN mkdir oatomobile
+COPY . oatomobile
+WORKDIR /workspace/oatomobile
+RUN pip install oatomobile
+ENV PYTHONPATH=$PYTHONPATH:/workspace/oatomobile
 
 #####################
 # CMD
