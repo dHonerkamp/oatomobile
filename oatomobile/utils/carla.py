@@ -141,8 +141,13 @@ def setup(
       client = carla.Client("localhost", port)  # pylint: disable=no-member
       client.set_timeout(client_timeout)
       client.load_world(map_name=town)
+
+      traffic_manager = client.get_trafficmanager(8000)
+      traffic_manager.set_synchronous_mode(False)
+
       world = client.get_world()
       world.set_weather(carla.WeatherParameters.ClearNoon)  # pylint: disable=no-member
+      world.wait_for_tick()
       frame = world.apply_settings(
           carla.WorldSettings(  # pylint: disable=no-member
               no_rendering_mode=False,
@@ -339,7 +344,7 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   # scale to screen
   converted[:, :2] = converted[:, :2] * (disp_size - 1) / 2 + (disp_size - 1) / 2
 
-
+  # number of depth bins
   depth_size = 10
   max_depth = 1000  # meters
   # replace with a linear depth scaling so we can compare it with the values from the depth camera
@@ -368,6 +373,7 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
   semantic_camera_obs_1d = np.vectorize(SEMANTIC_TO_SEGID_MAP.get)(semantic_camera_obs_1d)
 
   # https://carla.readthedocs.io/en/latest/ref_sensors/#depth-camera
+  # https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/image/ColorConverter.h
   # depth_normalized = depth_camera_obs[:, :, 0]
   depth_idx = ((depth_size - 1) * depth_camera_obs[:, :, 0]).astype(np.int)
 
@@ -400,6 +406,14 @@ def carla_semantic_lidar_measurement_to_instance_ndarray(
         filled3D = canvas_instance[tuple(ind)]
         twoD = np.take_along_axis(filled3D.reshape(-1, depth_size), depth_idx.reshape(-1, 1), axis=1).reshape(disp_size)
         canvas_clean[semantic_mask] = twoD[semantic_mask]
+
+
+  # # map to a [0, n_instances] range
+  # # sort to make sure the linear id 0 (nothing) will always be mapped to the instance_id 0
+  # instance_ids = sorted(np.unique(points['ObjIdx']))
+  # # n_instances = len(instance_ids)
+  # to_linear_instance_id_map = {inst_id: i for i, inst_id in enumerate(instance_ids)}
+  # canvas_clean_linear_id = np.vectorize(to_linear_instance_id_map.get)(canvas_clean)
 
   # print(np.unique(canvas_clean))
 
@@ -569,6 +583,14 @@ def spawn_my_vehicles(
     synchronous_mode = True
     hybrid = False
 
+    traffic_manager = client.get_trafficmanager(tm_port)
+    traffic_manager.set_global_distance_to_leading_vehicle(2.0)
+    if hybrid:
+        traffic_manager.set_hybrid_physics_mode(True)
+
+    if synchronous_mode:
+        traffic_manager.set_synchronous_mode(True)
+
     blueprints = world.get_blueprint_library().filter("vehicle.*")
 
     if safe:
@@ -616,14 +638,6 @@ def spawn_my_vehicles(
             light_state = vls.Position | vls.LowBeam | vls.LowBeam
 
         # spawn the cars and set their autopilot and light state all together
-
-        traffic_manager = client.get_trafficmanager(tm_port)
-        traffic_manager.set_global_distance_to_leading_vehicle(2.0)
-        if hybrid:
-            traffic_manager.set_hybrid_physics_mode(True)
-
-        if synchronous_mode:
-            traffic_manager.set_synchronous_mode(True)
 
         batch.append(SpawnActor(blueprint, transform)
                      .then(SetAutopilot(FutureActor, True, traffic_manager.get_port()))
@@ -761,7 +775,8 @@ def spawn_moving_pedestrians(
       all_actors[i].set_max_speed(1 + random.random())  # max speed between 1 and 2 (default is 1.4 m/s)
 
   # TODO: or should I return all_actors which includes the controlers?
-  return world.get_actors([i["id"] for i in walkers_list])
+  # return world.get_actors([i["id"] for i in walkers_list])
+  return all_id
 
 
 def spawn_camera(

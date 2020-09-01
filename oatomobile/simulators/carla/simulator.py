@@ -2150,9 +2150,30 @@ class CARLASimulator(simulator.Simulator):
     if self.sensor_suite is not None:
       self.sensor_suite.close()
       self._sensor_suite = None
+
+    self._client.apply_batch([carla.command.DestroyActor(x) for x in [self._hero] + self._vehicles + self._pedestrians])
+
     settings = self._world.get_settings()
     settings.synchronous_mode = False
     self._world.apply_settings(settings)
+
+    # self._world.wait_for_tick()
+    # del self._world
+
+    traffic_manager = self._client.get_trafficmanager(8000)
+    traffic_manager.set_synchronous_mode(False)
+
+    # # self._client.load_world(map_name="Town01")
+    # self._client.reload_world()
+    # world = self._client.get_world()
+    # s = world.get_settings()
+    # s.synchronous_mode = True
+    # s.fixed_delta_seconds = 1.0 / 20
+    # s.no_rendering_mode = False
+    # frame = world.apply_settings(
+    #   s)
+    # # self._world.destroy()
+
     if self._server is not None:
       logging.debug("Closes the CARLA server with process PID {}".format(
           self._server.pid))

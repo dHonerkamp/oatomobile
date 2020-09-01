@@ -105,7 +105,9 @@ class EnvironmentLoop:
       # Garbage collector.
       try:
         self._environment.close()
-      except NameError:
+        # environment.close()
+      except NameError as e:
+        print(e)
         pass
 
       # Returns the recorded metrics.
