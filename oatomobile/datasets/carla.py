@@ -32,6 +32,8 @@ import tqdm
 import wget
 from absl import logging
 
+import carla
+
 from oatomobile.core.dataset import Dataset
 from oatomobile.core.dataset import Episode
 
@@ -182,6 +184,7 @@ class CARLADataset(Dataset):
       ),
       render: bool = False,
       create_vid: bool =False,
+      weather: carla.WeatherParameters = carla.WeatherParameters.ClearNoon
   ) -> None:
     """Collects autopilot demonstrations for a single episode on CARLA.
 
@@ -220,6 +223,7 @@ class CARLADataset(Dataset):
         destination=destination,
         num_vehicles=num_vehicles,
         num_pedestrians=num_pedestrians,
+        weather=weather
     )
     # Terminates episode if a collision occurs.
     env = TerminateOnCollisionWrapper(env)
@@ -271,6 +275,7 @@ class CARLADataset(Dataset):
       try:
         sequence = episode.fetch()
       except FileNotFoundError:
+        "File for episode token {} not found, continuing with next token".format(episode_token)
         continue
 
       # Always keep `past_length+future_length+1` files open.
@@ -329,6 +334,8 @@ class CARLADataset(Dataset):
         except Exception as e:
           if isinstance(e, KeyboardInterrupt):
             sys.exit(0)
+          else:
+              print(e)
 
   @staticmethod
   def plot_datum(

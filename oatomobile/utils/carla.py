@@ -81,6 +81,7 @@ def setup(
     client_timeout: float = 20.0,
     num_max_restarts: int = 5,
     start_server: bool = False,
+    weather: carla.WeatherParameters = carla.WeatherParameters.ClearNoon
 ) -> Tuple[carla.Client, carla.World, int, subprocess.Popen]:  # pylint: disable=no-member
   """Returns the `CARLA` `server`, `client` and `world`.
 
@@ -99,7 +100,7 @@ def setup(
     frame: The synchronous simulation time step ID.
     server: The `CARLA` server.
   """
-  assert town in ("Town01", "Town02", "Town03", "Town04", "Town05")
+  # assert town in ("Town01", "Town02", "Town03", "Town04", "Town05"), "Unknown town {}".format(town)
 
   # The attempts counter.
   attempts = 0
@@ -146,7 +147,7 @@ def setup(
       traffic_manager.set_synchronous_mode(False)
 
       world = client.get_world()
-      world.set_weather(carla.WeatherParameters.ClearNoon)  # pylint: disable=no-member
+      world.set_weather(weather)  # pylint: disable=no-member
       world.wait_for_tick()
       frame = world.apply_settings(
           carla.WorldSettings(  # pylint: disable=no-member

@@ -84,39 +84,38 @@ def main(argv):
   output_dir = FLAGS.output_dir
   render = FLAGS.render
 
-  try:
+  # try:
     # Setups the environment.
-    env = oatomobile.envs.CARLANavEnv(
-        town=town,
-        origin=0,
-        destination=25,
-        fps=20,
-        sensors=sensors,
+  env = oatomobile.envs.CARLANavEnv(
+      town=town,
+      origin=0,
+      destination=25,
+      fps=20,
+      sensors=sensors,
+  )
+  if max_episode_steps is not None:
+    env = oatomobile.FiniteHorizonWrapper(
+        env,
+        max_episode_steps=max_episode_steps,
     )
-    if max_episode_steps is not None:
-      env = oatomobile.FiniteHorizonWrapper(
-          env,
-          max_episode_steps=max_episode_steps,
-      )
-    if output_dir is not None:
-      env = oatomobile.SaveToDiskWrapper(env, output_dir=output_dir)
+  if output_dir is not None:
+    env = oatomobile.SaveToDiskWrapper(env, output_dir=output_dir)
+  # Runs the environment loop.
+  oatomobile.EnvironmentLoop(
+      agent_fn=functools.partial(BlindAgent, setpoint_index=2),
+      environment=env,
+      render_mode="human" if render else "none",
+  ).run()
 
-    # Runs the environment loop.
-    oatomobile.EnvironmentLoop(
-        agent_fn=functools.partial(BlindAgent, setpoint_index=2),
-        environment=env,
-        render_mode="human" if render else "none",
-    ).run()
-
-  except Exception as msg:
-    logging.error(msg)
-
-  finally:
-    # Garbage collector.
-    try:
-      env.close()
-    except NameError:
-      pass
+  # except Exception as msg:
+  #   logging.error(msg)
+  #
+  # finally:
+  #   # Garbage collector.
+  #   try:
+  env.close()
+    # except NameError:
+    #   pass
 
 
 if __name__ == "__main__":

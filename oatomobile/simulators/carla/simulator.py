@@ -1893,6 +1893,7 @@ class CARLASimulator(simulator.Simulator):
       num_pedestrians: int = 0,
       fps: int = defaults.SIMULATOR_FPS,
       client_timeout: float = defaults.CARLA_CLIENT_TIMEOUT,
+      weather: carla.WeatherParameters = carla.WeatherParameters.ClearNoon
   ) -> None:
     """Constructs a CARLA simulator wrapper.
 
@@ -1915,6 +1916,7 @@ class CARLASimulator(simulator.Simulator):
     """
     # Configuration variables.
     self._town = town
+    self._weather = weather
     self._sensors = sensors
     self._fps = fps
     self._client_timeout = client_timeout
@@ -2000,6 +2002,7 @@ class CARLASimulator(simulator.Simulator):
         town=self._town,
         fps=self._fps,
         client_timeout=self._client_timeout,
+        weather=self._weather
     )
     self._frame0 = int(self._frame)
     self._dt = self._world.get_settings().fixed_delta_seconds

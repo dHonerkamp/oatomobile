@@ -12,6 +12,7 @@ from PIL import Image
 import umsgpack
 import datetime
 
+from carla import WeatherParameters
 from oatomobile.core.dataset import Episode, tokens
 from oatomobile.datasets.carla import CARLADataset
 from oatomobile.utils.carla import LABEL_COLORS
@@ -27,15 +28,64 @@ class MapillaryDataset(CARLADataset):
         super(MapillaryDataset, self).__init__(id)
 
     @staticmethod
+    def get_episode_dirs(dataset_dir: str):
+        # output dir is either directly a dataset folder or the overall log folder with many towns
+        dirs = []
+        for d in os.listdir(dataset_dir):
+            if "Town" in d:
+                runs = os.listdir(os.path.join(str(dataset_dir), d))
+                for r in runs:
+                    episode_folder = os.path.join(dataset_dir, d, r, "raw")
+                    if not os.path.exists(episode_folder):
+                        print("Skipping non-existing folder: {}".format(episode_folder))
+                        continue
+                    else:
+                        dirs += [os.path.join(episode_folder, e) for e in os.listdir(episode_folder)]
+
+            else:
+                if dataset_dir.split('/')[-1] == "raw":
+                    dirs.append(d)
+                else:
+                    print("Skipping folder {}".format(d))
+                    continue
+        return sorted(dirs)
+
+    @staticmethod
+    def show_lengths(dataset_dir, verbose=True):
+        stats = {}
+
+        dirs = MapillaryDataset.get_episode_dirs(dataset_dir)
+        for episode_token in dirs:
+            logging.debug("Processes {} episode".format(episode_token))
+            # Initializes episode handler.
+            episode = Episode(parent_dir=dataset_dir, token=episode_token)
+            # Fetches all `.npz` files from the raw dataset.
+            try:
+                sequence = episode.fetch()
+                if verbose:
+                    print("Folder: {}".format(episode_token))
+                    print("Sequence tokens: {}".format(len(sequence)))
+                stats[episode_token] = len(sequence)
+            except Exception as e:
+                if verbose:
+                    print("Skipping folder {}: {}".format(episode_token, e))
+                stats[episode_token] = 0
+                continue
+        return stats
+
+    @staticmethod
     def process(
             dataset_dir: str,
             output_dir: str,
+            split: list = [0.6, 0.2, 0.2]
     ) -> None:
 
+        assert sum(split) == 1, "Split doesn't sum to 1"
+
         os.makedirs(output_dir, exist_ok=True)
-        d = Path(output_dir)
+        output_dir = Path(output_dir)
         for folder in ["img", "depth", "msk", "lst", "coco", "semantic"]:
-            os.makedirs(str(d / folder), exist_ok=True)
+            os.makedirs(str(output_dir / folder), exist_ok=True)
 
         # carla definitions
         carla_categories = [ "None", "Buildings", "Fences", "Other", "Pedestrians", "Poles", "RoadLines", "Roads", "Sidewalks", "Vegetation", "Vehicles", "Walls", "TrafficSigns", "sky", "ground", "bridge"]
@@ -69,15 +119,23 @@ class MapillaryDataset(CARLADataset):
             "images" : []
         }
 
+
+        # output dir is either directly a dataset folder or the overall log folder with many towns
+        dirs = MapillaryDataset.get_episode_dirs(dataset_dir)
+
         # Iterate over all episodes.
-        for episode_token in tqdm.tqdm(os.listdir(dataset_dir)):
+        for episode_token in dirs:
             logging.debug("Processes {} episode".format(episode_token))
             # Initializes episode handler.
             episode = Episode(parent_dir=dataset_dir, token=episode_token)
             # Fetches all `.npz` files from the raw dataset.
-            sequence = episode.fetch()
+            try:
+                sequence = episode.fetch()
+            except Exception as e:
+                print("Skipping folder {}: {}".format(episode_token, e))
+                continue
 
-            for s in sequence:
+            for s in tqdm.tqdm(sequence):
                 observation = episode.read_sample(sample_token=s)
                 rgb = observation['front_camera_rgb']
                 semantic_lidar = observation['semantic_lidar']
@@ -110,15 +168,36 @@ class MapillaryDataset(CARLADataset):
                 # to_linear_instance_id_map = {inst_id: i for i, inst_id in enumerate(instance_ids)}
                 # instance_obs_linear = np.vectorize(to_linear_instance_id_map.get)(instance_obs)
 
-                img_meta = MapillaryDataset._save_png(output_dir=d, image_id=s,
-                                           rgb=rgb, depth=depth, segment=segment_mask_linear, semantic=semantic_mapillary_catids)
+                img_meta = MapillaryDataset._save_png(output_dir=output_dir, image_id=s,
+                                                      rgb=rgb, depth=depth, segment=segment_mask_linear, semantic=semantic_mapillary_catids,
+                                                      num_stuff=len(stuff), num_thing=len(things))
                 meta["images"].append(img_meta)
 
-        with open(str(d / "metadata.bin"), "wb") as fid:
+
+            # TODO: REMOVE!!!!!!!!!!!!!!
+            break
+
+        with open(str(output_dir / "metadata.bin"), "wb") as fid:
             umsgpack.dump(meta, fid, encoding="utf-8")
 
+        n = len(meta["images"])
+        n_train = int(split[0] * n)
+        n_val = int(split[1] * n)
+
+        train_ids = [img["id"] for img in meta["images"][:n_train]]
+        val_ids = [img["id"] for img in meta["images"][n_train:n_train + n_val]]
+        test_ids = [img["id"] for img in meta["images"][n_train + n_val:]]
+
+        for name, s in zip(["train", "val", "test"], [train_ids, val_ids, test_ids]):
+            with open(str(output_dir / "lst" / (name + ".txt")), 'w') as f:
+                f.writelines('\n'.join(s))
+
+        print("\n######################################################################################################")
+        print("# Processed {} images".format(len(meta["images"])))
+        print("######################################################################################################\n")
+
     @staticmethod
-    def _save_png(output_dir, image_id, segment, semantic, depth, rgb):
+    def _save_png(output_dir, image_id, segment, semantic, depth, rgb, num_stuff, num_thing):
         fname = "{}.png".format(image_id)
 
         rgb_rescaled = (255 * rgb).astype(np.uint8)
@@ -143,19 +222,29 @@ class MapillaryDataset(CARLADataset):
         vec = np.reshape(np.stack([segment.astype(int), semantic], axis=2), [-1, 2])
         segment_semantic_pairs, counts = np.unique(vec, axis=0, return_counts=True)
         # we might have multiple classes within a single segment mask -> take the one with the highest count
-        cats = []
+        # segmentid 0 is always the empty class, mapped to category 255
+        cats = [255]
         for s in sorted(set(segment_semantic_pairs[:, 0])):
-            m = segment_semantic_pairs[:, 0] == s
-            cls = segment_semantic_pairs[m]
-            n = counts[m]
-            more_freq = int(cls[np.argmax(n)][1])
-            cats.append(more_freq)
+            if s == 0:
+                continue
+            else:
+                m = segment_semantic_pairs[:, 0] == s
+                cls = segment_semantic_pairs[m]
+                n = counts[m]
+                more_freq = int(cls[np.argmax(n)][1])
+                cats.append(more_freq)
+
+        # while segmentsIds have 0 == empty, categoryIds start with 0 == first category -> shift left by one
+        for i in range(1, len(cats)):
+            cats[i] -= 1
 
         # segment_semantic_pairs_sorted = sorted(segment_semantic_pairs, key=lambda x: x[0])
         # cats = [e[1] for e in segment_semantic_pairs_sorted]
-        assert cats[0] == 0
-        cats[0] = 255
-
+        # assert cats[0] == 0, cats
+        # cats[0] = 255
+        assert cats[0] == 255, cats
+        assert max(cats[1:]) < num_stuff + num_thing  # < not <= due to 0-indexing
+        assert len(np.unique(segment)) == len(cats), (np.unique(segment), cats)
 
         images_meta = {"id": str(image_id),
                 "size": tuple(segment.T.shape),  # (height, width)
@@ -172,71 +261,111 @@ class TownsConfig:
     occupancy = dict()
     occupancy['empty'] = {'num_vehicles': 0,
                           'num_pedestrians': 0}
-    occupancy['busy_v0'] = {'num_vehicles': 100,
+    occupancy['busyV0'] = {'num_vehicles': 100,
                             'num_pedestrians': 100}
     towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
+    weather = {
+        "ClearNoon": WeatherParameters.ClearNoon,
+        "ClearSunset": WeatherParameters.ClearSunset,
+        "CloudyNoon": WeatherParameters.CloudyNoon,
+        "CloudySunset": WeatherParameters.CloudySunset,
+        "Default": WeatherParameters.Default,
+        "HardRainNoon": WeatherParameters.HardRainNoon,
+        "HardRainSunset": WeatherParameters.HardRainSunset,
+        "MidRainSunset": WeatherParameters.MidRainSunset,
+        "MidRainyNoon": WeatherParameters.MidRainyNoon,
+        "SoftRainNoon": WeatherParameters.SoftRainNoon,
+        "SoftRainSunset": WeatherParameters.SoftRainSunset,
+        "WetCloudyNoon": WeatherParameters.WetCloudyNoon,
+        "WetCloudySunset": WeatherParameters.WetCloudySunset,
+        "WetNoon": WeatherParameters.WetNoon,
+        "WetSunset": WeatherParameters.WetSunset,
+    }
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--town', type=str, default='Town01', choices=TownsConfig.towns)
-    parser.add_argument('--occ', type=str, default='busy_v0', choices=TownsConfig.occupancy.keys())
+    parser.add_argument('--occ', type=str, default='busyV0', choices=TownsConfig.occupancy.keys())
+    parser.add_argument('--weather', type=str, default='ClearNoon', choices=TownsConfig.weather.keys())
     parser.add_argument('-n', '--nepisodes', type=int, default=1)
+    parser.add_argument('--name', type=str, default="", help="Name of the run. If None set to now(). Can be used to reprocess existing folder in combination with -n 0")
     parser.add_argument('--num_steps', type=int, default=1000, help="Steps per episode")
-    parser.add_argument('--logdir', type=str, default='/home/honerkam/repos/oatomobile/logs/autopilot')
+    parser.add_argument('--logdir', type=str, default='/home/honerkam/repos/oatomobile/logs/')
+    parser.add_argument('-c', '--combine_towns', action='store_true')
     args = parser.parse_args()
     return args
 
 
-def main(do_collect: bool, do_plot: bool, town: str, nepisodes, occupancy: str, num_steps: int, logdir: str):
-    now = datetime.datetime.now()
-    root = Path(logdir) / (town + '_' + occupancy) / str(now)
+def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_steps: int, logdir: str, run_name: str):
+    if not run_name:
+        run_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    root = Path(logdir) / '_'.join([town, occupancy, weather]) / run_name
+    print("\n######################################################################################################")
+    print("# Collecting data. Root path: {}, collecting {} epsiodes, {} steps".format(root, nepisodes, num_steps))
+    print("######################################################################################################\n")
 
     dataset_dir = root / 'raw'
     processed_dir = root / 'processed'
     # e = Episode(output_dir, '4d07f65c76114dafb3dacd055e121269')
 
     occ = TownsConfig.occupancy[occupancy]
+    weath = TownsConfig.weather[weather]
 
-    if do_collect:
-        sensors = (
-                      "acceleration",
-                      "velocity",
-                      # "lidar",
-                      "is_at_traffic_light",
-                      "traffic_light_state",
-                      "actors_tracker",
-                      # added by me
-                      "front_camera_rgb",
-                      # "front_camera_depth",
-                      "semantic_lidar"
-                  )
+    sensors = (
+                  "acceleration",
+                  "velocity",
+                  # "lidar",
+                  "is_at_traffic_light",
+                  "traffic_light_state",
+                  "actors_tracker",
+                  # added by me
+                  "front_camera_rgb",
+                  # "front_camera_depth",
+                  "semantic_lidar"
+              )
 
-        for e in range(nepisodes):
-            MapillaryDataset.collect(town=town,
-                                 output_dir=str(dataset_dir),
-                                 num_vehicles=occ['num_vehicles'],
-                                 num_pedestrians=occ['num_pedestrians'],
-                                 sensors=sensors,
-                                 num_steps=num_steps,
-                                 render=False,
-                                 create_vid=False)
+    for e in range(nepisodes):
+        MapillaryDataset.collect(town=town,
+                             output_dir=str(dataset_dir),
+                             num_vehicles=occ['num_vehicles'],
+                             num_pedestrians=occ['num_pedestrians'],
+                             sensors=sensors,
+                             num_steps=num_steps,
+                             render=False,
+                             create_vid=False,
+                             weather=weath)
 
-        MapillaryDataset.process(dataset_dir=str(dataset_dir),
-                                 output_dir=str(processed_dir))
+    MapillaryDataset.process(dataset_dir=str(dataset_dir),
+                             output_dir=str(processed_dir))
 
-    if do_plot:
-        f = '081d5439a2a2429a884513473dfbc35b/0fe89c2fd5a04957b289e7e10b66b06e.npz'
-        CARLADataset.plot_datum(fname='/home/honerkam/repos/oatomobile/logs/autopilot/test_dataset/{}'.format(f),
-                                output_dir=dataset_dir / 'plots')
+    # if do_plot:
+    #     f = '081d5439a2a2429a884513473dfbc35b/0fe89c2fd5a04957b289e7e10b66b06e.npz'
+    #     CARLADataset.plot_datum(fname='/home/honerkam/repos/oatomobile/logs/autopilot/test_dataset/{}'.format(f),
+    #                             output_dir=dataset_dir / 'plots')
+
+
+def combine_towns(logdir: str):
+    print("Combining all runs found in folder {}".format(logdir))
+    MapillaryDataset.show_lengths(logdir)
+
+    MapillaryDataset.process(dataset_dir=logdir,
+                             output_dir=os.path.join(logdir, "combined", "processed"))
 
 
 if __name__ == '__main__':
     args = get_args()
-    main(do_collect=True,
-         do_plot=False,
-         town=args.town,
-         nepisodes=args.nepisodes,
-         occupancy=args.occ,
-         num_steps=args.num_steps,
-         logdir=args.logdir)
+
+    if args.combine_towns:
+        combine_towns(args.logdir)
+    else:
+        main(town=args.town,
+             nepisodes=args.nepisodes,
+             occupancy=args.occ,
+             num_steps=args.num_steps,
+             logdir=args.logdir,
+             run_name=args.name,
+             weather=args.weather)
+
+
