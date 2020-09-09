@@ -174,9 +174,6 @@ class MapillaryDataset(CARLADataset):
                 meta["images"].append(img_meta)
 
 
-            # TODO: REMOVE!!!!!!!!!!!!!!
-            break
-
         with open(str(output_dir / "metadata.bin"), "wb") as fid:
             umsgpack.dump(meta, fid, encoding="utf-8")
 
