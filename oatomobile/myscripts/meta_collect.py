@@ -1,5 +1,7 @@
 import os
 import subprocess
+from absl import logging
+logging.set_verbosity(logging.DEBUG)
 
 # os.environ["CARLA_ROOT"] = "/home/honerkam/repos/carla"
 # os.environ["PYTHONPATH"] = "/home/honerkam/repos/oatomobile:$PYTHONPATH"
@@ -7,7 +9,8 @@ import subprocess
 # export CARLA_ROOT = /home/honerkam/repos/carla
 # export PYTHONPATH = /home/honerkam/repos/oatomobile:$PYTHONPATH
 
-from oatomobile.myscripts.collect_data import MapillaryDataset
+from oatomobile.myscripts.MapillaryDataset import MapillaryDataset
+
 
 def main():
     towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
@@ -19,15 +22,10 @@ def main():
 
     for town in towns:
         for weather in weathers:
+            print("Next: {}, {}".format(town, weather))
             remaining_steps = num_steps
-            while True:
-                curr = cmd.format(num_steps=remaining_steps,
-                                  logdir=logdir,
-                                  weather=weather,
-                                  town=town)
-                print("\nRunning cmd: {}".format(curr))
-                subprocess.call(curr.split())
 
+            while True:
                 stats = MapillaryDataset.show_lengths(logdir, verbose=True)
                 relevant_folders, collected_steps = [], 0
                 for k, v in stats.items():
@@ -35,12 +33,21 @@ def main():
                         relevant_folders.append(k)
                         collected_steps += v
 
-                if collected_steps < remaining_steps:
-                    print("\nCollected only {} / {} steps. Trying again.".format(collected_steps, num_steps))
-                    # os.removedirs("blub")
-                    remaining_steps = num_steps - collected_steps
-                else:
+                if collected_steps >= num_steps:
                     break
+                else:
+                    print("\nCollected only {} / {} steps. Trying again.".format(collected_steps, num_steps))
+                    remaining_steps = num_steps - collected_steps
+                    # os.removedirs("blub")
+
+                    curr = cmd.format(num_steps=remaining_steps,
+                                      logdir=logdir,
+                                      weather=weather,
+                                      town=town)
+                    print("\nRunning cmd: {}".format(curr))
+                    subprocess.call(curr.split())
+
+
 
 if __name__ == '__main__':
     main()

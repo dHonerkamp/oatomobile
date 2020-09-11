@@ -107,7 +107,7 @@ RUN easy_install PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg
 # My Oatomobile
 #####################
 # other dependencies
-RUN pip install umsgpack
+RUN pip install umsgpack wandb
 
 WORKDIR /workspace
 ENV CARLA_ROOT=/workspace/carla
