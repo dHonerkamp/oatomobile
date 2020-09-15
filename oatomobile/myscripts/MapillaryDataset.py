@@ -16,6 +16,8 @@ from oatomobile.utils.carla import LABEL_COLORS
 class MapillaryDataset(CARLADataset):
     """https://github.com/mapillary/seamseg/wiki/Seamless-Scene-Segmentation-dataset-format"""
 
+    split_names = ["train", "val", "test"]
+
     def __init__(
             self,
             id: str,
@@ -166,8 +168,8 @@ class MapillaryDataset(CARLADataset):
                 # instance_obs_linear = np.vectorize(to_linear_instance_id_map.get)(instance_obs)
 
                 img_meta, wandb_image = MapillaryDataset._save_png(output_dir=output_dir, image_id=s,
-                                                      rgb=rgb, depth=depth, segment=segment_mask_linear, semantic=semantic_mapillary_catids,
-                                                      num_stuff=len(stuff), num_thing=len(things), mapillary_class_lbls=all_cats, log_wandb=len(wandb_imgs) < wandb_log_n)
+                                                                   rgb=rgb, depth=depth, segment=segment_mask_linear, semantic=semantic_mapillary_catids,
+                                                                   num_stuff=len(stuff), num_thing=len(things), mapillary_class_lbls=all_cats, log_wandb=len(wandb_imgs) < wandb_log_n)
                 meta["images"].append(img_meta)
 
 
@@ -190,7 +192,7 @@ class MapillaryDataset(CARLADataset):
         val_ids = [img["id"] for img in meta["images"][n_train:n_train + n_val]]
         test_ids = [img["id"] for img in meta["images"][n_train + n_val:]]
 
-        for name, s in zip(["train", "val", "test"], [train_ids, val_ids, test_ids]):
+        for name, s in zip(MapillaryDataset.split_names, [train_ids, val_ids, test_ids]):
             with open(str(output_dir / "lst" / (name + ".txt")), 'w') as f:
                 f.writelines('\n'.join(s))
 
@@ -236,9 +238,6 @@ class MapillaryDataset(CARLADataset):
                 more_freq = int(cls[np.argmax(n)][1])
                 # while segmentsIds have 0 == empty, categoryIds start with 0 == first category -> shift left by one
                 cats.append(more_freq - 1)
-
-                if s < 11 and more_freq != s:
-                    print(s, more_freq)
 
         # print(image_id)
         # print(segment_semantic_pairs)

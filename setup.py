@@ -19,6 +19,9 @@ from importlib import util as import_util
 from setuptools import find_packages
 from setuptools import setup
 
+with open('requirements.txt') as f:
+    required = f.read().splitlines()
+
 here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the README.mf file
@@ -46,23 +49,24 @@ setup(
     author_email="oatml@googlegroups.com",
     license="Apache License, Version 2.0",
     packages=find_packages(),
-    install_requires=[
-        "absl-py==0.9.0",
-        "gym==0.17.1",
-        "pygame==1.9.6",
-        "matplotlib==3.0.3",
-        "seaborn==0.9.1",
-        "pandas==0.25.3",
-        "scipy==1.4.1",
-        "transforms3d==0.3.1",
-        "tqdm==4.42.1",
-        "wget==3.2",
-        "networkx==2.4",
-        "imageio==2.8.0",
-        "tabulate==0.8.7",
-        "scikit-image==0.15.0",
-        "dm-tree==0.1.5",
-    ],
+    install_requires=required,
+    # install_requires=[
+    #     "absl-py==0.9.0",
+    #     "gym==0.17.1",
+    #     "pygame==1.9.6",
+    #     "matplotlib==3.0.3",
+    #     "seaborn==0.9.1",
+    #     "pandas==0.25.3",
+    #     "scipy==1.4.1",
+    #     "transforms3d==0.3.1",
+    #     "tqdm==4.42.1",
+    #     "wget==3.2",
+    #     "networkx==2.4",
+    #     "imageio==2.8.0",
+    #     "tabulate==0.8.7",
+    #     "scikit-image==0.15.0",
+    #     "dm-tree==0.1.5",
+    # ],
     tests_require=[
         "pytest",
     ],

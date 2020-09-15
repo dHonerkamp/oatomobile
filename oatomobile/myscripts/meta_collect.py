@@ -6,19 +6,22 @@ logging.set_verbosity(logging.DEBUG)
 # os.environ["CARLA_ROOT"] = "/home/honerkam/repos/carla"
 # os.environ["PYTHONPATH"] = "/home/honerkam/repos/oatomobile:$PYTHONPATH"
 
-# export CARLA_ROOT = /home/honerkam/repos/carla
-# export PYTHONPATH = /home/honerkam/repos/oatomobile:$PYTHONPATH
+"""
+export CARLA_ROOT=/home/honerkam/repos/carla
+export PYTHONPATH=/home/honerkam/repos/oatomobile:$PYTHONPATH
+"""
 
 from oatomobile.myscripts.MapillaryDataset import MapillaryDataset
 
 
 def main():
-    towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
+    # towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
+    towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05']
     weathers = ['ClearNoon', 'MidRainyNoon', 'CloudySunset']
     num_steps = 5000
-    logdir = "/home/honerkam/repos/oatomobile//logs_v3"
+    logdir = "/home/honerkam/repos/oatomobile/logs/data_v4"
 
-    cmd = "python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py -n 1 --num_steps {num_steps} --logdir {logdir} --town {town} --occ busyV0 --weather {weather}"
+    cmd = "python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py --action collect -n 1 --num_steps {num_steps} --logdir {logdir} --town {town} --occ busyV0 --weather {weather}"
 
     for town in towns:
         for weather in weathers:
