@@ -88,9 +88,8 @@ flags.DEFINE_bool(
 )
 flags.DEFINE_integer(
     name="num_workers",
-    # originally used 50
     default=50,
-    help="The numbers of time-steps to keep from the target, with downsampling.",
+    help="Number of workers for the dataloaders.",
 )
 
 def main(argv):

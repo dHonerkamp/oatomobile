@@ -80,7 +80,11 @@ flags.DEFINE_bool(
     default=False,
     help="If True it clips the gradients norm to 1.0.",
 )
-
+flags.DEFINE_integer(
+    name="num_workers",
+    default=50,
+    help="Number of workers for the dataloaders.",
+)
 
 def main(argv):
   # Debugging purposes.
