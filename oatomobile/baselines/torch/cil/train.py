@@ -16,6 +16,7 @@
 
 import os
 from typing import Mapping
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -26,6 +27,8 @@ from absl import app
 from absl import flags
 from absl import logging
 
+import wandb
+
 from oatomobile.baselines.torch.cil.model import BehaviouralModel
 from oatomobile.datasets.carla import CARLADataset
 from oatomobile.torch import types
@@ -33,15 +36,19 @@ from oatomobile.torch.loggers import TensorBoardLogger
 from oatomobile.torch.savers import Checkpointer
 
 logging.set_verbosity(logging.DEBUG)
+
+project_root = Path(__file__).parent.parent.parent.parent.parent
+test_data_dir = project_root / "logs" / "data_test" / "combined"
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     name="dataset_dir",
-    default=None,
+    default=str(project_root / "logs" / "oxford" / "processed"),
     help="The full path to the processed dataset.",
 )
 flags.DEFINE_string(
     name="output_dir",
-    default=None,
+    default=str(project_root / "logs" / "cil" / "oxford"),
     help="The full path to the output directory (for logs, ckpts).",
 )
 flags.DEFINE_integer(
@@ -79,210 +86,218 @@ flags.DEFINE_bool(
     default=False,
     help="If True it clips the gradients norm to 1.0.",
 )
-
+flags.DEFINE_integer(
+    name="num_workers",
+    # originally used 50
+    default=50,
+    help="The numbers of time-steps to keep from the target, with downsampling.",
+)
 
 def main(argv):
-  # Debugging purposes.
-  logging.debug(argv)
-  logging.debug(FLAGS)
+    # Debugging purposes.
+    logging.debug(argv)
+    logging.debug(FLAGS)
+    wandb.init(project='carla_rl', entity='wazzup', group='cil', sync_tensorboard=True)
 
-  # Parses command line arguments.
-  dataset_dir = FLAGS.dataset_dir
-  output_dir = FLAGS.output_dir
-  batch_size = FLAGS.batch_size
-  num_epochs = FLAGS.num_epochs
-  learning_rate = FLAGS.learning_rate
-  save_model_frequency = FLAGS.save_model_frequency
-  num_timesteps_to_keep = FLAGS.num_timesteps_to_keep
-  weight_decay = FLAGS.weight_decay
-  clip_gradients = FLAGS.clip_gradients
+    # Parses command line arguments.
+    dataset_dir = FLAGS.dataset_dir
+    output_dir = FLAGS.output_dir
+    batch_size = FLAGS.batch_size
+    num_epochs = FLAGS.num_epochs
+    learning_rate = FLAGS.learning_rate
+    save_model_frequency = FLAGS.save_model_frequency
+    num_timesteps_to_keep = FLAGS.num_timesteps_to_keep
+    weight_decay = FLAGS.weight_decay
+    clip_gradients = FLAGS.clip_gradients
+    num_workers = FLAGS.num_workers
 
-  # Determines device, accelerator.
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # pylint: disable=no-member
+    # Determines device, accelerator.
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # pylint: disable=no-member
+    logging.debug("Using device {}".format(device))
 
-  # Creates the necessary output directory.
-  os.makedirs(output_dir, exist_ok=True)
-  log_dir = os.path.join(output_dir, "logs")
-  os.makedirs(log_dir, exist_ok=True)
-  ckpt_dir = os.path.join(output_dir, "ckpts")
-  os.makedirs(ckpt_dir, exist_ok=True)
+    # Creates the necessary output directory.
+    os.makedirs(output_dir, exist_ok=True)
+    log_dir = os.path.join(output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    ckpt_dir = os.path.join(output_dir, "ckpts")
+    os.makedirs(ckpt_dir, exist_ok=True)
 
-  # Initializes the model and its optimizer.
-  output_shape = [num_timesteps_to_keep, 2]
-  model = BehaviouralModel(output_shape=output_shape).to(device)
-  criterion = nn.L1Loss(reduction="none")
-  optimizer = optim.Adam(
-      model.parameters(),
-      lr=learning_rate,
-      weight_decay=weight_decay,
-  )
-  writer = TensorBoardLogger(log_dir=log_dir)
-  checkpointer = Checkpointer(model=model, ckpt_dir=ckpt_dir)
+    # Initializes the model and its optimizer.
+    output_shape = [num_timesteps_to_keep, 2]
+    model = BehaviouralModel(output_shape=output_shape).to(device)
+    criterion = nn.L1Loss(reduction="none")
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
+    writer = TensorBoardLogger(log_dir=log_dir)
+    checkpointer = Checkpointer(model=model, ckpt_dir=ckpt_dir)
 
-  def transform(batch: Mapping[str, types.Array]) -> Mapping[str, torch.Tensor]:
-    """Preprocesses a batch for the model.
+    def transform(batch: Mapping[str, types.Array]) -> Mapping[str, torch.Tensor]:
+        """Preprocesses a batch for the model.
 
-    Args:
-      batch: (keyword arguments) The raw batch variables.
+        Args:
+          batch: (keyword arguments) The raw batch variables.
 
-    Returns:
-      The processed batch.
-    """
-    # Sends tensors to `device`.
-    batch = {key: tensor.to(device) for (key, tensor) in batch.items()}
-    # Preprocesses batch for the model.
-    batch = model.transform(batch)
-    return batch
+        Returns:
+          The processed batch.
+        """
+        # Sends tensors to `device`.
+        batch = {key: tensor.to(device) for (key, tensor) in batch.items()}
+        # Preprocesses batch for the model.
+        batch = model.transform(batch)
+        return batch
 
-  # Setups the dataset and the dataloader.
-  modalities = (
-      "lidar",
-      "is_at_traffic_light",
-      "traffic_light_state",
-      "player_future",
-      "velocity",
-  )
-  dataset_train = CARLADataset.as_torch(
-      dataset_dir=os.path.join(dataset_dir, "train"),
-      modalities=modalities,
-      mode=True,
-  )
-  dataloader_train = torch.utils.data.DataLoader(
-      dataset_train,
-      batch_size=batch_size,
-      shuffle=True,
-      num_workers=50,
-  )
-  dataset_val = CARLADataset.as_torch(
-      dataset_dir=os.path.join(dataset_dir, "val"),
-      modalities=modalities,
-      mode=True,
-  )
-  dataloader_val = torch.utils.data.DataLoader(
-      dataset_val,
-      batch_size=batch_size * 5,
-      shuffle=True,
-      num_workers=50,
-  )
-
-  def train_step(
-      model: BehaviouralModel,
-      optimizer: optim.Optimizer,
-      batch: Mapping[str, torch.Tensor],
-      clip: bool = False,
-  ) -> torch.Tensor:
-    """Performs a single gradient-descent optimisation step."""
-    # Resets optimizer's gradients.
-    optimizer.zero_grad()
-    # Forward pass from the model.
-    predictions = model(**batch)
-    # Calculates loss.
-    loss = criterion(predictions, batch["player_future"][..., :2])
-    loss = torch.sum(loss, dim=[-2, -1])  # pylint: disable=no-member
-    loss = torch.mean(loss, dim=0)  # pylint: disable=no-member
-    # Backward pass.
-    loss.backward()
-    # Clips gradients norm.
-    if clip:
-      torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
-    # Performs a gradient descent step.
-    optimizer.step()
-    return loss
-
-  def train_epoch(
-      model: BehaviouralModel,
-      optimizer: optim.Optimizer,
-      dataloader: torch.utils.data.DataLoader,
-  ) -> torch.Tensor:
-    """Performs an epoch of gradient descent optimization on `dataloader`."""
-    model.train()
-    loss = 0.0
-    with tqdm.tqdm(dataloader) as pbar:
-      for batch in pbar:
-        # Prepares the batch.
-        batch = transform(batch)
-        # Performs a gradien-descent step.
-        loss += train_step(model, optimizer, batch, clip=clip_gradients)
-    return loss / len(dataloader)
-
-  def evaluate_step(
-      model: BehaviouralModel,
-      batch: Mapping[str, torch.Tensor],
-  ) -> torch.Tensor:
-    """Evaluates `model` on a `batch`."""
-    # Forward pass from the model.
-    predictions = model(**batch)
-    # Calculates loss on mini-batch.
-    loss = criterion(predictions, batch["player_future"][..., :2])
-    loss = torch.sum(loss, dim=[-2, -1])  # pylint: disable=no-member
-    loss = torch.mean(loss, dim=0)  # pylint: disable=no-member
-    return loss
-
-  def evaluate_epoch(
-      model: BehaviouralModel,
-      dataloader: torch.utils.data.DataLoader,
-  ) -> torch.Tensor:
-    """Performs an evaluation of the `model` on the `dataloader."""
-    model.eval()
-    loss = 0.0
-    with tqdm.tqdm(dataloader) as pbar:
-      for batch in pbar:
-        # Prepares the batch.
-        batch = transform(batch)
-        # Accumulates loss in dataset.
-        with torch.no_grad():
-          loss += evaluate_step(model, batch)
-    return loss / len(dataloader)
-
-  def write(
-      model: BehaviouralModel,
-      dataloader: torch.utils.data.DataLoader,
-      writer: TensorBoardLogger,
-      split: str,
-      loss: torch.Tensor,
-      epoch: int,
-  ) -> None:
-    """Visualises model performance on `TensorBoard`."""
-    # Gets a sample from the dataset.
-    batch = next(iter(dataloader))
-    # Prepares the batch.
-    batch = transform(batch)
-    # Generates predictions.
-    with torch.no_grad():
-      predictions = model(**batch)
-    # Logs on `TensorBoard`.
-    writer.log(
-        split=split,
-        loss=loss.detach().cpu().numpy().item(),
-        overhead_features=batch["visual_features"].detach().cpu().numpy()[:8],
-        predictions=predictions.detach().cpu().numpy()[:8],
-        ground_truth=batch["player_future"].detach().cpu().numpy()[:8],
-        global_step=epoch,
+    # Setups the dataset and the dataloader.
+    modalities = (
+        "lidar",
+        "is_at_traffic_light",
+        "traffic_light_state",
+        "player_future",
+        "velocity",
+    )
+    dataset_train = CARLADataset.as_torch(
+        dataset_dir=os.path.join(dataset_dir, "train"),
+        modalities=modalities,
+        mode=True,
+    )
+    dataloader_train = torch.utils.data.DataLoader(
+        dataset_train,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+    )
+    dataset_val = CARLADataset.as_torch(
+        dataset_dir=os.path.join(dataset_dir, "val"),
+        modalities=modalities,
+        mode=True,
+    )
+    dataloader_val = torch.utils.data.DataLoader(
+        dataset_val,
+        batch_size=batch_size * 5,
+        shuffle=True,
+        num_workers=num_workers,
     )
 
-  with tqdm.tqdm(range(num_epochs)) as pbar_epoch:
-    for epoch in pbar_epoch:
-      # Trains model on whole training dataset, and writes on `TensorBoard`.
-      loss_train = train_epoch(model, optimizer, dataloader_train)
-      write(model, dataloader_train, writer, "train", loss_train, epoch)
+    def train_step(
+            model: BehaviouralModel,
+            optimizer: optim.Optimizer,
+            batch: Mapping[str, torch.Tensor],
+            clip: bool = False,
+    ) -> torch.Tensor:
+        """Performs a single gradient-descent optimisation step."""
+        # Resets optimizer's gradients.
+        optimizer.zero_grad()
+        # Forward pass from the model.
+        predictions = model(**batch)
+        # Calculates loss.
+        loss = criterion(predictions, batch["player_future"][..., :2])
+        loss = torch.sum(loss, dim=[-2, -1])  # pylint: disable=no-member
+        loss = torch.mean(loss, dim=0)  # pylint: disable=no-member
+        # Backward pass.
+        loss.backward()
+        # Clips gradients norm.
+        if clip:
+            torch.nn.utils.clip_grad_norm(model.parameters(), 1.0)
+        # Performs a gradient descent step.
+        optimizer.step()
+        return loss
 
-      # Evaluates model on whole validation dataset, and writes on `TensorBoard`.
-      loss_val = evaluate_epoch(model, dataloader_val)
-      write(model, dataloader_val, writer, "val", loss_val, epoch)
+    def train_epoch(
+            model: BehaviouralModel,
+            optimizer: optim.Optimizer,
+            dataloader: torch.utils.data.DataLoader,
+    ) -> torch.Tensor:
+        """Performs an epoch of gradient descent optimization on `dataloader`."""
+        model.train()
+        loss = 0.0
+        with tqdm.tqdm(dataloader) as pbar:
+            for batch in pbar:
+                # Prepares the batch.
+                batch = transform(batch)
+                # Performs a gradien-descent step.
+                loss += train_step(model, optimizer, batch, clip=clip_gradients)
+        return loss / len(dataloader)
 
-      # Checkpoints model weights.
-      if epoch % save_model_frequency == 0:
-        checkpointer.save(epoch)
+    def evaluate_step(
+            model: BehaviouralModel,
+            batch: Mapping[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Evaluates `model` on a `batch`."""
+        # Forward pass from the model.
+        predictions = model(**batch)
+        # Calculates loss on mini-batch.
+        loss = criterion(predictions, batch["player_future"][..., :2])
+        loss = torch.sum(loss, dim=[-2, -1])  # pylint: disable=no-member
+        loss = torch.mean(loss, dim=0)  # pylint: disable=no-member
+        return loss
 
-      # Updates progress bar description.
-      pbar_epoch.set_description("TL: {:.2f} | VL: {:.2f}".format(
-          loss_train.detach().cpu().numpy().item(),
-          loss_val.detach().cpu().numpy().item(),
-      ))
+    def evaluate_epoch(
+            model: BehaviouralModel,
+            dataloader: torch.utils.data.DataLoader,
+    ) -> torch.Tensor:
+        """Performs an evaluation of the `model` on the `dataloader."""
+        model.eval()
+        loss = 0.0
+        with tqdm.tqdm(dataloader) as pbar:
+            for batch in pbar:
+                # Prepares the batch.
+                batch = transform(batch)
+                # Accumulates loss in dataset.
+                with torch.no_grad():
+                    loss += evaluate_step(model, batch)
+        return loss / len(dataloader)
+
+    def write(
+            model: BehaviouralModel,
+            dataloader: torch.utils.data.DataLoader,
+            writer: TensorBoardLogger,
+            split: str,
+            loss: torch.Tensor,
+            epoch: int,
+    ) -> None:
+        """Visualises model performance on `TensorBoard`."""
+        # Gets a sample from the dataset.
+        batch = next(iter(dataloader))
+        # Prepares the batch.
+        batch = transform(batch)
+        # Generates predictions.
+        with torch.no_grad():
+            predictions = model(**batch)
+        # Logs on `TensorBoard`.
+        writer.log(
+            split=split,
+            loss=loss.detach().cpu().numpy().item(),
+            overhead_features=batch["visual_features"].detach().cpu().numpy()[:8],
+            predictions=predictions.detach().cpu().numpy()[:8],
+            ground_truth=batch["player_future"].detach().cpu().numpy()[:8],
+            global_step=epoch,
+        )
+
+    with tqdm.tqdm(range(num_epochs)) as pbar_epoch:
+        for epoch in pbar_epoch:
+            # Trains model on whole training dataset, and writes on `TensorBoard`.
+            loss_train = train_epoch(model, optimizer, dataloader_train)
+            write(model, dataloader_train, writer, "train", loss_train, epoch)
+
+            # Evaluates model on whole validation dataset, and writes on `TensorBoard`.
+            loss_val = evaluate_epoch(model, dataloader_val)
+            write(model, dataloader_val, writer, "val", loss_val, epoch)
+
+            # Checkpoints model weights.
+            if epoch % save_model_frequency == 0:
+                checkpointer.save(epoch)
+
+            # Updates progress bar description.
+            pbar_epoch.set_description("TL: {:.2f} | VL: {:.2f}".format(
+                loss_train.detach().cpu().numpy().item(),
+                loss_val.detach().cpu().numpy().item(),
+            ))
 
 
 if __name__ == "__main__":
-  flags.mark_flag_as_required("dataset_dir")
-  flags.mark_flag_as_required("output_dir")
-  flags.mark_flag_as_required("num_epochs")
-  app.run(main)
+    flags.mark_flag_as_required("dataset_dir")
+    flags.mark_flag_as_required("output_dir")
+    flags.mark_flag_as_required("num_epochs")
+    app.run(main)

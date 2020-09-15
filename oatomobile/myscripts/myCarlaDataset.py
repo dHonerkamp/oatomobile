@@ -39,13 +39,10 @@ class MyCarlaDataset(CARLADataset):
 
     @staticmethod
     def process(
-            # #######################################################
-            # TODO: CHANGE BACK TO CARLADATASET VALUES!!!!!!!!!!!!!!!
-            # #######################################################
             dataset_dir: str,
             output_dir: str,
             mapillary_lst_dir: str,
-            future_length: int = 20,
+            future_length: int = 80,
             past_length: int = 20,
             num_frame_skips: int = 5,
     ) -> None:
