@@ -21,7 +21,14 @@ def main():
     num_steps = 5000
     logdir = "/home/honerkam/repos/oatomobile/logs/data_v4"
 
-    cmd = "python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py --action collect -n 1 --num_steps {num_steps} --logdir {logdir} --town {town} --occ busyV0 --weather {weather}"
+    cmd = """python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py 
+             --action collect 
+             -n 1 
+             --num_steps {num_steps} 
+             --logdir {logdir} 
+             --town {town} 
+             --occ busyV0 
+             --weather {weather}"""
 
     for town in towns:
         for weather in weathers:

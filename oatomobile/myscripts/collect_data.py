@@ -4,7 +4,7 @@ import os
 import datetime
 
 from carla import WeatherParameters
-from oatomobile.myscripts.MapillaryDataset import MapillaryDataset
+from oatomobile.myscripts.MapillaryDataset import MapillaryDataset, TownsConfig
 from oatomobile.myscripts.myCarlaDataset import MyCarlaDataset
 from oatomobile.datasets.carla import CARLADataset
 
@@ -19,35 +19,6 @@ Info on mapillary dataformat:
 - https://cocodataset.org/#format-data
 """
 
-
-class TownsConfig:
-    """https://carla.readthedocs.io/en/latest/core_map/"""
-    occupancy = dict()
-    occupancy['empty'] = {'num_vehicles': 0,
-                          'num_pedestrians': 0}
-    occupancy['busyV0'] = {'num_vehicles': 100,
-                            'num_pedestrians': 100}
-    # towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
-    towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05']
-    weather = {
-        "ClearNoon": WeatherParameters.ClearNoon,
-        "ClearSunset": WeatherParameters.ClearSunset,
-        "CloudyNoon": WeatherParameters.CloudyNoon,
-        "CloudySunset": WeatherParameters.CloudySunset,
-        "Default": WeatherParameters.Default,
-        "HardRainNoon": WeatherParameters.HardRainNoon,
-        "HardRainSunset": WeatherParameters.HardRainSunset,
-        "MidRainSunset": WeatherParameters.MidRainSunset,
-        "MidRainyNoon": WeatherParameters.MidRainyNoon,
-        "SoftRainNoon": WeatherParameters.SoftRainNoon,
-        "SoftRainSunset": WeatherParameters.SoftRainSunset,
-        "WetCloudyNoon": WeatherParameters.WetCloudyNoon,
-        "WetCloudySunset": WeatherParameters.WetCloudySunset,
-        "WetNoon": WeatherParameters.WetNoon,
-        "WetSunset": WeatherParameters.WetSunset,
-    }
-
-
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--town', type=str, default='Town01', choices=TownsConfig.towns)
@@ -60,16 +31,18 @@ def get_args():
     parser.add_argument('--action', type=str, default='collect', choices=['collect', 'combine', 'oxford'])
     parser.add_argument('--wandb_log_n', type=int, default=0, help="Whether to visualise the first n images in wandb")
     parser.add_argument('--process_immediately', action='store_true', help="Directly process after collectin")
+    parser.add_argument('--val_share', type=float, default=0.1, help="Share of the training data to use for validation")
+    parser.add_argument('--test_towns', nargs='+', default=None, choices=TownsConfig.towns, help="Towns to use for the test set")
     args = parser.parse_args()
     return args
 
 
 def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_steps: int, logdir: str, run_name: str, do_process: bool = False,
-         wandb_log_n: int = 0):
+         wandb_log_n: int = 0, val_share=None, test_towns=None):
     if not run_name:
         run_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    root = Path(logdir) / '_'.join([town, occupancy, weather]) / run_name
+    root = Path(logdir) / TownsConfig.get_task_name(town=town, occupancy=occupancy, weather=weather) / run_name
     print("\n######################################################################################################")
     print("# Collecting data. Root path: {}, collecting {} epsiodes, {} steps".format(root, nepisodes, num_steps))
     print("######################################################################################################\n")
@@ -85,13 +58,13 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
     sensors = (
                   "acceleration",
                   "velocity",
-                  # "lidar",
+                  "lidar",
                   "is_at_traffic_light",
                   "traffic_light_state",
                   "actors_tracker",
                   # added by me
                   "front_camera_rgb",
-                  # "front_camera_depth",
+                  # "front_camera_depth", -> get from semantic lidar
                   "semantic_lidar"
               )
 
@@ -109,7 +82,9 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
     if do_process:
         MapillaryDataset.process(dataset_dir=str(dataset_dir),
                                  output_dir=str(processed_dir),
-                                 wandb_log_n=wandb_log_n)
+                                 wandb_log_n=wandb_log_n,
+                                 val_share=val_share,
+                                 test_towns=test_towns)
 
         MyCarlaDataset.process(dataset_dir=str(dataset_dir),
                                output_dir=str(carla_dataset_dir),
@@ -121,7 +96,7 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
     #                             output_dir=dataset_dir / 'plots')
 
 
-def combine_towns(logdir: str, wandb_log_n: int = 0):
+def combine_towns(logdir: str, wandb_log_n: int = 0, val_share=None, test_towns=None):
     print("Combining all runs found in folder {}".format(logdir))
     MapillaryDataset.show_lengths(logdir)
 
@@ -130,7 +105,9 @@ def combine_towns(logdir: str, wandb_log_n: int = 0):
 
     MapillaryDataset.process(dataset_dir=logdir,
                              output_dir=processed_dir,
-                             wandb_log_n=wandb_log_n)
+                             wandb_log_n=wandb_log_n,
+                             val_share=val_share,
+                             test_towns=test_towns)
 
     MyCarlaDataset.process(dataset_dir=logdir,
                            output_dir=carla_dataset_dir,
@@ -149,7 +126,7 @@ if __name__ == '__main__':
         wandb.init(project="carla_efficientps_data")
 
     if args.action == 'combine':
-        combine_towns(args.logdir, wandb_log_n=args.wandb_log_n)
+        combine_towns(args.logdir, wandb_log_n=args.wandb_log_n, val_share=args.val_share, test_towns=args.test_towns)
     elif args.action == 'oxford':
         download_oxford_data(args.logdir)
     elif args.action == 'collect':
@@ -161,7 +138,9 @@ if __name__ == '__main__':
              run_name=args.name,
              weather=args.weather,
              wandb_log_n=args.wandb_log_n,
-             do_process=args.process_immediately)
+             do_process=args.process_immediately,
+             val_share=args.val_share,
+             test_towns=args.test_towns)
     else:
         raise NotImplementedError("--action {} not implemented".format(args.action))
 

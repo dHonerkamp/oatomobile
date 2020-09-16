@@ -101,6 +101,7 @@ def main(argv):
   num_timesteps_to_keep = FLAGS.num_timesteps_to_keep
   weight_decay = FLAGS.weight_decay
   clip_gradients = FLAGS.clip_gradients
+  num_workers = FLAGS.num_workers
   noise_level = 1e-2
 
   # Determines device, accelerator.
@@ -155,7 +156,7 @@ def main(argv):
       dataset_train,
       batch_size=batch_size,
       shuffle=True,
-      num_workers=50,
+      num_workers=num_workers,
   )
   dataset_val = CARLADataset.as_torch(
       dataset_dir=os.path.join(dataset_dir, "val"),
@@ -165,7 +166,7 @@ def main(argv):
       dataset_val,
       batch_size=batch_size * 5,
       shuffle=True,
-      num_workers=50,
+      num_workers=num_workers,
   )
 
   # Theoretical limit of NLL.

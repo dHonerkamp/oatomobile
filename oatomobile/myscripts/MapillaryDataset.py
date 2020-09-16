@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+import random
 
 import numpy as np
 import tqdm
@@ -8,9 +9,48 @@ import umsgpack
 from PIL import Image
 import wandb
 
+from carla import WeatherParameters
+
 from oatomobile import Episode
 from oatomobile.datasets import CARLADataset
 from oatomobile.utils.carla import LABEL_COLORS
+
+
+class TownsConfig:
+    """https://carla.readthedocs.io/en/latest/core_map/"""
+    occupancy = dict()
+    occupancy['empty'] = {'num_vehicles': 0,
+                          'num_pedestrians': 0}
+    occupancy['busyV0'] = {'num_vehicles': 100,
+                           'num_pedestrians': 100}
+    # towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
+    towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05']
+    weather = {
+        "ClearNoon": WeatherParameters.ClearNoon,
+        "ClearSunset": WeatherParameters.ClearSunset,
+        "CloudyNoon": WeatherParameters.CloudyNoon,
+        "CloudySunset": WeatherParameters.CloudySunset,
+        "Default": WeatherParameters.Default,
+        "HardRainNoon": WeatherParameters.HardRainNoon,
+        "HardRainSunset": WeatherParameters.HardRainSunset,
+        "MidRainSunset": WeatherParameters.MidRainSunset,
+        "MidRainyNoon": WeatherParameters.MidRainyNoon,
+        "SoftRainNoon": WeatherParameters.SoftRainNoon,
+        "SoftRainSunset": WeatherParameters.SoftRainSunset,
+        "WetCloudyNoon": WeatherParameters.WetCloudyNoon,
+        "WetCloudySunset": WeatherParameters.WetCloudySunset,
+        "WetNoon": WeatherParameters.WetNoon,
+        "WetSunset": WeatherParameters.WetSunset,
+    }
+
+    @staticmethod
+    def get_task_name(town, occupancy, weather):
+        return '_'.join([town, occupancy, weather])
+
+    @staticmethod
+    def parse_task_name(task_name: str):
+        town, occ, weather = task_name.split('_')
+        return {"town": town, "occ": occ, "weather": weather}
 
 
 class MapillaryDataset(CARLADataset):
@@ -74,11 +114,19 @@ class MapillaryDataset(CARLADataset):
     def process(
             dataset_dir: str,
             output_dir: str,
-            split: list = [0.6, 0.2, 0.2],
+            split: list = None,
             wandb_log_n: int = 0,
+            val_share: float = None,
+            test_towns: list = None
     ) -> None:
 
-        assert sum(split) == 1, "Split doesn't sum to 1"
+        if split is not None:
+            assert not test_towns, test_towns
+            assert not val_share, val_share
+            assert sum(split) == 1, "Split doesn't sum to 1"
+        else:
+            assert val_share, val_share
+            assert test_towns, test_towns
 
         os.makedirs(output_dir, exist_ok=True)
         output_dir = Path(output_dir)
@@ -121,12 +169,20 @@ class MapillaryDataset(CARLADataset):
         # output dir is either directly a dataset folder or the overall log folder with many towns
         dirs = MapillaryDataset.get_episode_dirs(dataset_dir)
         wandb_imgs = []
+        task_descriptions = []
 
         # Iterate over all episodes.
-        for episode_token in dirs:
-            logging.debug("Processes {} episode".format(episode_token))
+        for k, episode_token in enumerate(dirs):
+            logging.debug("Processing episode {}/{}: {}".format(k, len(dirs), episode_token))
             # Initializes episode handler.
             episode = Episode(parent_dir=dataset_dir, token=episode_token)
+
+            substrs = episode._episode_dir.split('/')
+            task_name = [s for s in substrs if 'Town' in s][0]
+            task_descr = TownsConfig.parse_task_name(task_name)
+            task_descr['episode_token'] = episode_token.split('/')[-1]
+            task_descriptions.append(task_descr)
+
             # Fetches all `.npz` files from the raw dataset.
             try:
                 sequence = episode.fetch()
@@ -170,8 +226,8 @@ class MapillaryDataset(CARLADataset):
                 img_meta, wandb_image = MapillaryDataset._save_png(output_dir=output_dir, image_id=s,
                                                                    rgb=rgb, depth=depth, segment=segment_mask_linear, semantic=semantic_mapillary_catids,
                                                                    num_stuff=len(stuff), num_thing=len(things), mapillary_class_lbls=all_cats, log_wandb=len(wandb_imgs) < wandb_log_n)
+                img_meta.update(task_descr)
                 meta["images"].append(img_meta)
-
 
                 if len(wandb_imgs) < wandb_log_n:
                     wandb_imgs.append(wandb_image)
@@ -184,13 +240,30 @@ class MapillaryDataset(CARLADataset):
         with open(str(output_dir / "metadata.bin"), "wb") as fid:
             umsgpack.dump(meta, fid, encoding="utf-8")
 
-        n = len(meta["images"])
-        n_train = int(split[0] * n)
-        n_val = int(split[1] * n)
+        if split is not None:
+            n = len(meta["images"])
+            n_train = int(split[0] * n)
+            n_val = int(split[1] * n)
 
-        train_ids = [img["id"] for img in meta["images"][:n_train]]
-        val_ids = [img["id"] for img in meta["images"][n_train:n_train + n_val]]
-        test_ids = [img["id"] for img in meta["images"][n_train + n_val:]]
+            train_ids = [img["id"] for img in meta["images"][:n_train]]
+            val_ids = [img["id"] for img in meta["images"][n_train:n_train + n_val]]
+            test_ids = [img["id"] for img in meta["images"][n_train + n_val:]]
+        else:
+            train_ids, val_ids, test_ids = [], [], []
+            # split validation set by episode so we could use the same split for RL
+            non_test_episodes = [e['episode_token'] for e in task_descriptions if e["town"] not in test_towns]
+            n_train = int((1 - val_share) * len(task_descriptions))
+            random.shuffle(non_test_episodes)
+            train_episodes, val_episodes = non_test_episodes[:n_train], non_test_episodes[n_train:]
+
+            for img in meta["images"]:
+                if img["episode_token"] in train_episodes:
+                    train_ids.append(img["id"])
+                elif img["episode_token"] in val_episodes:
+                    val_ids.append(img["id"])
+                else:
+                    test_ids.append(img["id"])
+            assert len(train_ids) + len(val_ids) + len(test_ids) == len(meta["images"])
 
         for name, s in zip(MapillaryDataset.split_names, [train_ids, val_ids, test_ids]):
             with open(str(output_dir / "lst" / (name + ".txt")), 'w') as f:
@@ -208,8 +281,14 @@ class MapillaryDataset(CARLADataset):
         rgb_im = Image.fromarray(rgb_rescaled, "RGB")
         rgb_im.save(output_dir / "img" / fname)
 
-        # TODO: scale into an appropriate max_depth range
-        depth1d = depth[:, :, 0]  # all channels have the same value
+        # scale into an appropriate max_depth range
+        # max depth seems to be set to 1000
+        # https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-depth-map
+        # https://carla.readthedocs.io/en/latest/ref_sensors/#depth-camera
+        old_max_depth = 1000
+        new_max_depth = 250
+        depth1d = depth[:, :, 0]  # all channels have the same value, range [0, 1]
+        depth1d = np.clip(depth1d * old_max_depth, 0, new_max_depth) / new_max_depth
         depth_rescaled = (65536 * depth1d).astype(np.uint16)
         depth_im = Image.fromarray(depth_rescaled.T, "I;16")
         depth_im.save(output_dir / "depth" / fname)
