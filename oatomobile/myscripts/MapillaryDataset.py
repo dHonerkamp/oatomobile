@@ -23,6 +23,8 @@ class TownsConfig:
                           'num_pedestrians': 0}
     occupancy['busyV0'] = {'num_vehicles': 100,
                            'num_pedestrians': 100}
+    occupancy['noCrash'] = {'num_vehicles': [50, 100],
+                            'num_pedestrians': [30, 70]}
     # towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05', 'Town06', 'Town07', 'Town10']
     towns = ['Town01', 'Town02', 'Town03', 'Town04', 'Town05']
     weather = {
@@ -173,7 +175,7 @@ class MapillaryDataset(CARLADataset):
 
         # Iterate over all episodes.
         for k, episode_token in enumerate(dirs):
-            logging.debug("Processing episode {}/{}: {}".format(k, len(dirs), episode_token))
+            print("Processing episode {}/{}: {}".format(k, len(dirs), episode_token))
             # Initializes episode handler.
             episode = Episode(parent_dir=dataset_dir, token=episode_token)
 
@@ -252,7 +254,7 @@ class MapillaryDataset(CARLADataset):
             train_ids, val_ids, test_ids = [], [], []
             # split validation set by episode so we could use the same split for RL
             non_test_episodes = [e['episode_token'] for e in task_descriptions if e["town"] not in test_towns]
-            n_train = int((1 - val_share) * len(task_descriptions))
+            n_train = int((1 - val_share) * len(non_test_episodes))
             random.shuffle(non_test_episodes)
             train_episodes, val_episodes = non_test_episodes[:n_train], non_test_episodes[n_train:]
 
@@ -270,7 +272,7 @@ class MapillaryDataset(CARLADataset):
                 f.writelines('\n'.join(s))
 
         print("\n######################################################################################################")
-        print("# Processed {} images".format(len(meta["images"])))
+        print("# Processed {} images. {} train, {} val, {} test".format(len(meta["images"]), len(train_ids), len(val_ids), len(test_ids)))
         print("######################################################################################################\n")
 
     @staticmethod

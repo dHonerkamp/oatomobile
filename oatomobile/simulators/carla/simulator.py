@@ -2028,7 +2028,7 @@ class CARLASimulator(simulator.Simulator):
         world=self._world,
         num_vehicles=self._num_vehicles,
         client=self._client,
-        safe=False,
+        safe=True,
         car_lights_on=False,
     )
     # Initializes the pedestrians.

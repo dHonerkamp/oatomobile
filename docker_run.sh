@@ -7,7 +7,7 @@ elif (( "$1" == "collect" )); then
   echo "starting mycarla container"
 
   towns=('Town01' 'Town02' 'Town03' 'Town04' 'Town05' 'Town06' 'Town07' 'Town10')
-  weather=('ClearNoon' 'MidRainyNoon', 'CloudySunset')
+  weather=('ClearNoon' 'MidRainyNoon' 'CloudySunset')
   num_steps=10000
   export CARLA_ROOT=/home/honerkam/repos/carla
   export PYTHONPATH=/home/honerkam/repos/oatomobile:$PYTHONPATH

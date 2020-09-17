@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import os
 import datetime
+import random
 
 from carla import WeatherParameters
 from oatomobile.myscripts.MapillaryDataset import MapillaryDataset, TownsConfig
@@ -18,6 +19,7 @@ Info on mapillary dataformat:
 - https://github.com/mapillary/seamseg/wiki/Seamless-Scene-Segmentation-dataset-format
 - https://cocodataset.org/#format-data
 """
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -69,10 +71,21 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
               )
 
     for e in range(nepisodes):
+        if isinstance(occ['num_vehicles'], (list, tuple)):
+            assert len(occ['num_vehicles']) == 2
+            num_vehicles = random.randint(occ['num_vehicles'][0], occ['num_vehicles'][1])
+        else:
+            num_vehicles = occ['num_vehicles']
+        if isinstance(occ['num_pedestrians'], (list, tuple)):
+            assert len(occ['num_pedestrians']) == 2
+            num_pedestrians = random.randint(occ['num_pedestrians'][0], occ['num_pedestrians'][1])
+        else:
+            num_pedestrians = occ['num_pedestrians']
+
         MapillaryDataset.collect(town=town,
                                  output_dir=str(dataset_dir),
-                                 num_vehicles=occ['num_vehicles'],
-                                 num_pedestrians=occ['num_pedestrians'],
+                                 num_vehicles=num_vehicles,
+                                 num_pedestrians=num_pedestrians,
                                  sensors=sensors,
                                  num_steps=num_steps,
                                  render=False,
