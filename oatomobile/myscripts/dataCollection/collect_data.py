@@ -60,6 +60,7 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
     sensors = (
                   "acceleration",
                   "velocity",
+                  "control",  # [throttle, steer, brake]
                   "lidar",
                   "is_at_traffic_light",
                   "traffic_light_state",

@@ -14,11 +14,11 @@ elif (( "$1" == "collect" )); then
 #  towns=('Town05' 'Town06' 'Town07' 'Town10')
   for t in "${towns[@]}"; do
     for w in "${weather[@]}"; do
-      cmd="python oatomobile/myscripts/collect_data.py -n 1 --num_steps ${num_steps} --logdir ./logs --town ${t} --occ busyV0 --weather ${w}"
+      cmd="python oatomobile/myscripts/dataCollection/collect_data.py -n 1 --num_steps ${num_steps} --logdir ./logs --town ${t} --occ busyV0 --weather ${w}"
       echo "Running cmd: ${cmd}"
       eval $cmd
 
-  #    cmd="python oatomobile/myscripts/collect_data.py -n 1 --num_steps ${num_steps} --logdir /oatomobile/logs --town ${t} --occ busyV0 --weather ${w}"
+  #    cmd="python oatomobile/myscripts/dataCollection/collect_data.py -n 1 --num_steps ${num_steps} --logdir /oatomobile/logs --town ${t} --occ busyV0 --weather ${w}"
   #    echo "Running cmd: ${cmd}"
   #    docker run --privileged --rm --gpus all --net=host -e DISPLAY=$DISPLAY \
   #      -v /tmp/.X11-unix:/tmp/.X11-unix:rw \

@@ -71,7 +71,10 @@ class MyCarlaDataset(CARLADataset):
                 continue
 
             # Always keep `past_length+future_length+1` files open.
-            assert len(sequence) >= past_length + future_length + 1
+            if not len(sequence) >= past_length + future_length + 1:
+                print("SEQUENCE {} IS TOO SHORT. IGNORING IT AND MOVING ON.".format(sequence))
+                continue
+
             for i in tqdm.trange(
                     past_length,
                     len(sequence) - future_length,

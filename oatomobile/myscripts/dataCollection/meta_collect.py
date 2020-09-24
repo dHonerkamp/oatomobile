@@ -48,11 +48,11 @@ def main():
     occs = NoCrashTrainingConfig.occupancy
     n_settings = len(towns) * len(weathers) * len(occs)
 
-    total_steps = 100000  # per config combination, not overall
+    total_steps = 250000  # per config combination, not overall
     num_steps_per_setting = total_steps // n_settings
 
-    min_steps_per_episode = 2999
-    max_steps_per_episode = 3000
+    min_steps_per_episode = 5999
+    max_steps_per_episode = 6000
     logdir = "/home/honerkam/repos/oatomobile/logs/data_noCrashTrain"
 
     cmd = """python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py 

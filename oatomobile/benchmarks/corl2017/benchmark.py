@@ -36,9 +36,10 @@ from oatomobile.core.rl import Metric
 from oatomobile.core.rl import SaveToDiskWrapper
 from oatomobile.core.rl import StepsMetric
 from oatomobile.envs.carla import CARLANavEnv
-from oatomobile.envs.carla import CollisionsMetric
+from oatomobile.envs.carla import CollisionsMetric, DistanceMetric
 from oatomobile.envs.carla import LaneInvasionsMetric
 from oatomobile.envs.carla import TerminateOnCollisionWrapper
+from oatomobile.core.rl import ReturnsMetric
 
 _configs = glob.glob(
     os.path.join(
@@ -85,7 +86,7 @@ class CORL2017(Benchmark):
   @property
   def metrics(self) -> Sequence[Metric]:
     """Returns the list of metrics associated with the benchmark."""
-    return [StepsMetric(), CollisionsMetric(), LaneInvasionsMetric()]
+    return [StepsMetric(), CollisionsMetric(), LaneInvasionsMetric(), DistanceMetric(), ReturnsMetric()]
 
 
 corl2017 = CORL2017()
