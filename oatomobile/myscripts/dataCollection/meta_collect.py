@@ -12,7 +12,7 @@ export CARLA_ROOT=/home/honerkam/repos/carla
 export PYTHONPATH=/home/honerkam/repos/oatomobile:$PYTHONPATH
 """
 
-from oatomobile.myscripts.MapillaryDataset import MapillaryDataset
+from oatomobile.myscripts.dataCollection.MapillaryDataset import MapillaryDataset
 
 
 class NoCrashTrainingConfig:
@@ -55,7 +55,7 @@ def main():
     max_steps_per_episode = 6000
     logdir = "/home/honerkam/repos/oatomobile/logs/data_noCrashTrain"
 
-    cmd = """python /home/honerkam/repos/oatomobile/oatomobile/myscripts/collect_data.py 
+    cmd = """python /home/honerkam/repos/oatomobile/oatomobile/myscripts/dataCollection/collect_data.py 
              --action collect 
              -n 1 
              --num_steps {num_steps} 

@@ -22,7 +22,8 @@ import carla
 from oatomobile.core.dataset import Dataset
 from oatomobile.core.dataset import Episode
 from oatomobile.datasets import CARLADataset
-from oatomobile.myscripts.MapillaryDataset import MapillaryDataset
+from oatomobile.datasets.carla import get_direction_command
+from oatomobile.myscripts.dataCollection.MapillaryDataset import MapillaryDataset
 
 
 class MyCarlaDataset(CARLADataset):

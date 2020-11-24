@@ -31,11 +31,44 @@ import numpy as np
 import tqdm
 import wget
 from absl import logging
+from enum import IntEnum
 
 import carla
 
 from oatomobile.core.dataset import Dataset
 from oatomobile.core.dataset import Episode
+
+
+class DirectionsEnum(IntEnum):
+    # coiltrane values:
+    # REACH_GOAL = 0
+    # GO_STRAIGHT = 5
+    # TURN_RIGHT = 4
+    # TURN_LEFT = 3
+    # LANE_FOLLOW = 2
+    # oatomobile values:
+    GO_STRAIGHT = 0
+    STOP = 1
+    TURN_LEFT = 2
+    TURN_RIGHT = 3
+
+
+def get_direction_command(plan):
+    x_T, y_T = plan[-1, :2]
+    # Norm of the vector (x_T, y_T).
+    norm = np.linalg.norm([x_T, y_T])
+    # Angle of vector (0, 0) -> (x_T, y_T).
+    theta = np.degrees(np.arccos(x_T / (norm + 1e-3)))
+
+    if norm < 3:  # STOP
+        mode = DirectionsEnum.STOP
+    elif theta > 15:  # LEFT
+        mode = DirectionsEnum.TURN_LEFT
+    elif theta <= -15:  # RIGHT
+        mode = DirectionsEnum.TURN_RIGHT
+    else:  # FORWARD
+        mode = DirectionsEnum.GO_STRAIGHT
+    return np.atleast_1d(mode)
 
 
 class CARLADataset(Dataset):
@@ -282,11 +315,7 @@ class CARLADataset(Dataset):
 
             # Always keep `past_length+future_length+1` files open.
             assert len(sequence) >= past_length + future_length + 1
-            for i in tqdm.trange(
-                    past_length,
-                    len(sequence) - future_length,
-                    num_frame_skips,
-            ):
+            for i in tqdm.trange(past_length, len(sequence) - future_length, num_frame_skips):
                 try:
                     # Player context/observation.
                     observation = episode.read_sample(sample_token=sequence[i])
@@ -296,10 +325,7 @@ class CARLADataset(Dataset):
                     # Build past trajectory.
                     player_past = list()
                     for j in range(past_length, 0, -1):
-                        past_location = episode.read_sample(
-                            sample_token=sequence[i - j],
-                            attr="location",
-                        )
+                        past_location = episode.read_sample(sample_token=sequence[i - j], attr="location")
                         player_past.append(past_location)
                     player_past = np.asarray(player_past)
                     assert len(player_past.shape) == 2
@@ -312,10 +338,7 @@ class CARLADataset(Dataset):
                     # Build future trajectory.
                     player_future = list()
                     for j in range(1, future_length + 1):
-                        future_location = episode.read_sample(
-                            sample_token=sequence[i + j],
-                            attr="location",
-                        )
+                        future_location = episode.read_sample(sample_token=sequence[i + j], attr="location")
                         player_future.append(future_location)
                     player_future = np.asarray(player_future)
                     assert len(player_future.shape) == 2

@@ -136,7 +136,9 @@ class MapillaryDataset(CARLADataset):
             os.makedirs(str(output_dir / folder), exist_ok=True)
 
         # carla definitions
-        carla_categories = [ "None", "Buildings", "Fences", "Other", "Pedestrians", "Poles", "RoadLines", "Roads", "Sidewalks", "Vegetation", "Vehicles", "Walls", "TrafficSigns", "sky", "ground", "bridge"]
+        carla_categories = ["None", "Buildings", "Fences", "Other", "Pedestrians", "Poles", "RoadLines", "Roads",
+                            "Sidewalks", "Vegetation", "Vehicles", "Walls", "TrafficSigns", "sky", "ground", "bridge",
+                            "RailTrack", "GuardRail", "TrafficLight", "Static", "Dynamic", "Water", "Terrain"]
         carla_palette = LABEL_COLORS.tolist()
         carla_catids = list(range(len(carla_categories)))
         carla_cat2catid = dict(zip(carla_categories, carla_catids))
@@ -146,7 +148,9 @@ class MapillaryDataset(CARLADataset):
         # carla_colorsum2cat = dict(zip([sum(c) for c in carla_palette], carla_categories))
 
         # mapillary definitions
-        stuff = ["Buildings", "Fences", "Other", "Poles", "RoadLines", "Roads", "Sidewalks", "Vegetation", "Walls", "TrafficSigns", "sky", "ground", "bridge"]
+        stuff = ["Buildings", "Fences", "Other", "Poles", "RoadLines", "Roads", "Sidewalks", "Vegetation", "Walls",
+                 "TrafficSigns", "sky", "ground", "bridge", "RailTrack", "GuardRail", "TrafficLight", "Static",
+                 "Dynamic", "Water", "Terrain"]
         things = ["Pedestrians", "Vehicles"]
         # without "None" category
         all_cats = stuff + things

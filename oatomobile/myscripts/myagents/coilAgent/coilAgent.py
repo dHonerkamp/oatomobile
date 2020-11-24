@@ -4,6 +4,8 @@ import yaml
 import torch
 import torch.optim as optim
 import numpy as np
+from matplotlib import pyplot as plt
+import wandb
 
 import carla
 
@@ -54,7 +56,7 @@ class CoilAgent(BaseAgent):
         directions_tensor = torch.Tensor([directions]).to(self._device)
         # Compute the forward pass processing the sensors got from CARLA.
         model_outputs = self._model.forward_branch(self._process_sensors(sensor_data), norm_speed,
-                                                  directions_tensor)
+                                                   directions_tensor)
 
         steer, throttle, brake = self._process_model_outputs(model_outputs[0])
 
@@ -102,16 +104,16 @@ class CoilAgent(BaseAgent):
     def eval_step(self, batch):
         self._model.eval()
         with torch.no_grad():
-            controls = batch['directions']
+            directions = batch['directions']
             # The output(branches) is a list of 5 branches results, each branch is with size [120,3]
             self._model.zero_grad()
             branches = self._model(torch.squeeze(batch['rgb'].to(self._device)),
-                                   batch[self._inputs].to(self._device))
+                                   extract_modality(batch, self._inputs).to(self._device))
             loss_function_params = {
                 'branches': branches,
-                'targets': batch[self._targets],
-                'controls': controls.to(self._device),
-                'inputs': batch[self._inputs].to(self._device),
+                'targets': extract_modality(batch, self._targets).to(self._device),
+                'directions': directions.to(self._device),
+                'inputs': extract_modality(batch, self._inputs).to(self._device),
                 'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
                 'variable_weights': self.params["VARIABLE_WEIGHT"]
             }
@@ -135,16 +137,18 @@ class CoilAgent(BaseAgent):
 
         # get the control commands from float_data, size = [120,1]
 
-        controls = batch['directions']
+        directions = batch['directions']
+        # directions = batch['mode']
+
         # The output(branches) is a list of 5 branches results, each branch is with size [120,3]
         self._model.zero_grad()
         branches = self._model(torch.squeeze(batch['rgb'].to(self._device)),
-                               batch[self._inputs].to(self._device))
+                               extract_modality(batch, self._inputs).to(self._device))
         loss_function_params = {
             'branches': branches,
-            'targets': batch[self._targets],
-            'controls': controls.to(self._device),
-            'inputs': batch[self._inputs].to(self._device),
+            'targets': extract_modality(batch, self._targets).to(self._device),
+            'directions': directions.to(self._device),
+            'inputs': extract_modality(batch, self._inputs).to(self._device),
             'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
             'variable_weights': self.params["VARIABLE_WEIGHT"]
         }
@@ -171,28 +175,7 @@ class CoilAgent(BaseAgent):
                    }
 
 
-        # Log a random position
-        # position = random.randint(0, len(data) - 1)
-        #
-        # output = self._model.extract_branch(torch.stack(branches[0:4]), controls)
-        # error = torch.abs(output - dataset.extract_targets(data).cuda())
-        #
-        # accumulated_time += time.time() - capture_time
-        #
-        # coil_logger.add_message('Iterating',
-        #                         {'Iteration': iteration,
-        #                          'Loss': loss.data.tolist(),
-        #                          'Images/s': (iteration * g_conf.BATCH_SIZE) / accumulated_time,
-        #                          'BestLoss': best_loss, 'BestLossIteration': best_loss_iter,
-        #                          'Output': output[position].data.tolist(),
-        #                          'GroundTruth': dataset.extract_targets(data)[
-        #                              position].data.tolist(),
-        #                          'Error': error[position].data.tolist(),
-        #                          'Inputs': dataset.extract_inputs(data)[
-        #                              position].data.tolist()},
-        #                         iteration)
-        # coil_logger.write_on_error_csv('train', loss.data)
-        # print("Iteration: %d  Loss: %f" % (iteration, loss.data))
+
 
         # TODO: used for their weird lr schedule
         # loss_window.append(loss.data.tolist())

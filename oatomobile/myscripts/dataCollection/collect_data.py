@@ -5,8 +5,8 @@ import datetime
 import random
 
 from carla import WeatherParameters
-from oatomobile.myscripts.MapillaryDataset import MapillaryDataset, TownsConfig
-from oatomobile.myscripts.myCarlaDataset import MyCarlaDataset
+from oatomobile.myscripts.dataCollection.MapillaryDataset import MapillaryDataset, TownsConfig
+from oatomobile.myscripts.dataCollection.myCarlaDataset import MyCarlaDataset
 from oatomobile.datasets.carla import CARLADataset
 
 from absl import logging
@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument('--logdir', type=str, default='/home/honerkam/repos/oatomobile/logs/data_test')
     parser.add_argument('--action', type=str, default='collect', choices=['collect', 'combine', 'oxford'])
     parser.add_argument('--wandb_log_n', type=int, default=0, help="Whether to visualise the first n images in wandb")
-    parser.add_argument('--process_immediately', action='store_true', help="Directly process after collectin")
+    parser.add_argument('--process_immediately', action='store_true', help="Directly process after collecting")
     parser.add_argument('--val_share', type=float, default=0.1, help="Share of the training data to use for validation")
     parser.add_argument('--test_towns', nargs='+', default=None, choices=TownsConfig.towns, help="Towns to use for the test set")
     args = parser.parse_args()

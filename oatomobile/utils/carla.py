@@ -46,11 +46,12 @@ import matplotlib.pyplot as plt
 from skimage import measure
 from scipy import ndimage as nd
 
+# https://carla.readthedocs.io/en/latest/ref_sensors/#semantic-segmentation-camera
 LABEL_COLORS = np.array([
     (0, 0, 0),       # None = 0
     (70, 70, 70),    # Buildings = 1
-    (190, 153, 153), # Fences = 2
-    (250, 170, 160), # Other = 3
+    (100, 40, 40), # Fences = 2
+    (55, 90, 80), # Other = 3
     (220, 20, 60),   # Pedestrians = 4
     (153, 153, 153), # Poles = 5
     (157, 234, 50),  # RoadLines = 6
@@ -63,13 +64,20 @@ LABEL_COLORS = np.array([
     (70, 130, 180),  # sky = 13u,
     (81, 0, 81),     # ground = 14u,
     (150, 100, 100), # bridge = 15u,
+    (230, 150, 140), # RailTrack = 16
+    (180, 165, 180), # GuardRail = 17
+    (250, 170, 30),  # TrafficLight = 18
+    (110, 190, 160), # Static = 19
+    (170, 120, 50),  # Dynamic = 20
+    (45, 60, 150),   # Water = 21
+    (145, 170, 100), # Terrain = 22
 ])
 
 # all colors above have a unique sum, use this to easier map bacl from rgb to index
 SEMANTIC_TO_SEGID_MAP = {sum(color): i for i, color in enumerate(LABEL_COLORS)}
 assert len(SEMANTIC_TO_SEGID_MAP) == len(LABEL_COLORS), "Color map no longer has unique sums!"
 # map all except cars and pedestrians to 0 (i.e. background)
-ignore = [0, 1, 2, 3, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15]
+ignore = [0, 1, 2, 3, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
 for cls in ignore:
     SEMANTIC_TO_SEGID_MAP[sum(LABEL_COLORS[cls])] = 0
 
