@@ -48,12 +48,15 @@ def main():
     occs = NoCrashTrainingConfig.occupancy
     n_settings = len(towns) * len(weathers) * len(occs)
 
-    total_steps = 250000  # per config combination, not overall
+    total_steps = 200000  # overall, not per config combination
     num_steps_per_setting = total_steps // n_settings
 
     min_steps_per_episode = 5999
     max_steps_per_episode = 6000
-    logdir = "/home/honerkam/repos/oatomobile/logs/data_noCrashTrain"
+    delete_below_length = 1000
+    logdir = "/home/honerkam/repos/oatomobile/logs/data_noCrashTrain_v3"
+    if not os.path.exists(logdir):
+        os.mkdir(logdir)
 
     cmd = """python /home/honerkam/repos/oatomobile/oatomobile/myscripts/dataCollection/collect_data.py 
              --action collect 
@@ -74,7 +77,7 @@ def main():
                 print("Next: {}, {}".format(town, weather, occ))
 
                 while True:
-                    stats = MapillaryDataset.show_lengths(logdir, verbose=True)
+                    stats = MapillaryDataset.show_lengths(logdir, verbose=True, delete_shorter_than=delete_below_length)
                     relevant_folders, collected_steps, total_collected = [], 0, 0
                     for k, v in stats.items():
                         total_collected += v

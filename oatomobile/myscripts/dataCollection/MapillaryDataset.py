@@ -8,6 +8,7 @@ import tqdm
 import umsgpack
 from PIL import Image
 import wandb
+import shutil
 
 from carla import WeatherParameters
 
@@ -90,7 +91,7 @@ class MapillaryDataset(CARLADataset):
         return sorted(dirs)
 
     @staticmethod
-    def show_lengths(dataset_dir, verbose=True):
+    def show_lengths(dataset_dir, verbose=True, delete_shorter_than=0):
         stats = {}
 
         dirs = MapillaryDataset.get_episode_dirs(dataset_dir)
@@ -101,10 +102,17 @@ class MapillaryDataset(CARLADataset):
             # Fetches all `.npz` files from the raw dataset.
             try:
                 sequence = episode.fetch()
+                n = len(sequence)
                 if verbose:
                     print("Folder: {}".format(episode_token))
-                    print("Sequence tokens: {}".format(len(sequence)))
-                stats[episode_token] = len(sequence)
+                    print("Sequence tokens: {}".format(n))
+
+                if n < delete_shorter_than:
+                    print("Deleting because shorter than {}".format(delete_shorter_than))
+                    assert os.path.exists(episode_token)
+                    shutil.rmtree(episode_token)
+                    n = 0
+                stats[episode_token] = n
             except Exception as e:
                 if verbose:
                     print("Skipping folder {}: {}".format(episode_token, e))
