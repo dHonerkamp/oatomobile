@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import importlib
 
-from oatomobile.myscripts.agents.coilAgent.coilutils import command_number_to_index
+from oatomobile.myscripts.myagents.coilAgent.coilutils import command_number_to_index
 
 from .building_blocks import Conv
 from .building_blocks import Branching
@@ -47,7 +47,7 @@ class CoILICRA(nn.Module):
             number_output_neurons = params['perception']['fc']['neurons'][-1]
 
         elif 'res' in params['perception']:  # pre defined residual networks
-            resnet_module = importlib.import_module('oatomobile.myscripts.agents.coilAgent.network.models.building_blocks.resnet')
+            resnet_module = importlib.import_module('oatomobile.myscripts.myagents.coilAgent.network.models.building_blocks.resnet')
             resnet_module = getattr(resnet_module, params['perception']['res']['name'])
             self.perception = resnet_module(pretrained=config["PRE_TRAINED"],
                                              num_classes=params['perception']['res']['num_classes'])

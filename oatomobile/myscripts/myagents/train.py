@@ -34,7 +34,7 @@ from oatomobile.datasets.carla import CARLADataset
 from oatomobile.torch import types
 from oatomobile.torch.loggers import TensorBoardLogger
 from oatomobile.torch.savers import Checkpointer
-from oatomobile.myscripts.agents.coilAgent.coilAgent import CoilAgent
+from oatomobile.myscripts.myagents.coilAgent.coilAgent import CoilAgent
 
 logging.set_verbosity(logging.DEBUG)
 
@@ -42,9 +42,15 @@ project_root = Path(__file__).parent.parent.parent.parent
 test_data_dir = project_root / "logs" / "data_test" / "combined"
 
 FLAGS = flags.FLAGS
+flags.DEFINE_bool(
+    name="dry_run",
+    default=False,
+    help="wandb dry-run.",
+)
 flags.DEFINE_string(
     name="dataset_dir",
-    default=str(project_root / "logs" / "oxford" / "processed"),
+    # default=str(project_root / "logs" / "oxford" / "processed"),
+    default=str(project_root / "logs" / "data_test_v2" / "Town01_busyV0_ClearNoon" / "20201123_153932" / "carla_dataset"),
     help="The full path to the processed dataset.",
 )
 flags.DEFINE_string(
@@ -117,12 +123,13 @@ def train_epoch(
     """Performs an epoch of gradient descent optimization on `dataloader`."""
     loss = 0.0
     with tqdm.tqdm(dataloader) as pbar:
-        for batch in pbar:
+        for i, batch in enumerate(pbar):
             # Prepares the batch.
             # batch = transform(batch)
             metrics = agent.train_step(batch)
             # Performs a gradien-descent step.
             loss += metrics['loss']
+            pbar.set_description("train-loss: {}".format(loss / i))
     mean_loss = loss / len(dataloader)
     # TODO: log the mean of all metrics, not just loss
     wandb.log({'train/loss': mean_loss}, step)
@@ -134,21 +141,26 @@ def evaluate_epoch(
     ):
     """Performs an evaluation of the `model` on the `dataloader."""
     loss = 0.0
-    with tqdm.tqdm(dataloader) as pbar:
-        for batch in pbar:
-            # Prepares the batch.
-            # batch = transform(batch)
-            # Accumulates loss in dataset.
-            with torch.no_grad():
-                loss += agent.eval_step(batch)['loss']
+    with torch.no_grad():
+        with tqdm.tqdm(dataloader) as pbar:
+            for i, batch in enumerate(pbar):
+                # Prepares the batch.
+                # batch = transform(batch)
+                # Accumulates loss in dataset.
+                metrics = agent.eval_step(batch, return_example=False)
+                loss += metrics['loss']
+                pbar.set_description("eval-loss: {}".format(loss / i))
     mean_loss = loss / len(dataloader)
     wandb.log({'eval/loss': mean_loss}, step)
-
+    return mean_loss
 
 def main(argv):
     # Debugging purposes.
     logging.debug(argv)
     logging.debug(FLAGS)
+
+    if FLAGS.dry_run:
+        os.environ['WANDB_MODE'] = 'dryrun'
     wandb.init(project='carla_rl', entity='wazzup', group='cil', sync_tensorboard=True)
 
     # Parses command line arguments.
@@ -192,11 +204,15 @@ def main(argv):
     # Setups the dataset and the dataloader.
     modalities = (
         "lidar",
+        "front_camera_rgb",
+        "control",
         "is_at_traffic_light",
         "traffic_light_state",
         "player_future",
         "velocity",
     )
+
+    assert os.path.exists(os.path.join(dataset_dir, "train")), os.path.join(dataset_dir, "train")
     dataset_train = CARLADataset.as_torch(
         dataset_dir=os.path.join(dataset_dir, "train"),
         modalities=modalities,

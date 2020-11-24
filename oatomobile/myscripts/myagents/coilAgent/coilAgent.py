@@ -8,9 +8,13 @@ import numpy as np
 import carla
 
 from oatomobile.core.rl import Env
-from oatomobile.myscripts.agents.baseAgent import BaseAgent
-from oatomobile.myscripts.agents.coilAgent.network.models.coil_icra import CoILICRA
-from oatomobile.myscripts.agents.coilAgent.network import Loss
+from oatomobile.myscripts.myagents.baseAgent import BaseAgent
+from oatomobile.myscripts.myagents.coilAgent.network.models.coil_icra import CoILICRA
+from oatomobile.myscripts.myagents.coilAgent.network import Loss
+
+
+def extract_modality(batch, modalities):
+    return torch.cat([batch[k] for k in modalities], dim=-1)
 
 
 class CoilAgent(BaseAgent):
