@@ -85,7 +85,7 @@ class CoILICRA(nn.Module):
         for i in range(params['branches']['number_of_branches']):
             branch_fc_vector.append(FC(params={'neurons': [params['join']['fc']['neurons'][-1]] +
                                                          params['branches']['fc']['neurons'] +
-                                                         [len(config["TARGETS"])],
+                                                         [config["NTARGETS"]],
                                                'dropouts': params['branches']['fc']['dropouts'] + [0.0],
                                                'end_layer': True}))
 

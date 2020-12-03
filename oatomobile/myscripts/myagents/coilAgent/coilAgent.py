@@ -101,6 +101,45 @@ class CoilAgent(BaseAgent):
 
         return steer, throttle, brake
 
+    def log_example(self, batch, prefix, n=5):
+        self._model.eval()
+        with torch.no_grad():
+            directions = batch['directions']
+            # The output(branches) is a list of 5 branches results, each branch is with size [120,3]
+            self._model.zero_grad()
+            branches = self._model(torch.squeeze(batch['rgb'].to(self._device)),
+                                   extract_modality(batch, self._inputs).to(self._device))
+            loss_function_params = {
+                'branches': branches,
+                'targets': extract_modality(batch, self._targets).to(self._device),
+                'directions': directions.to(self._device),
+                'inputs': extract_modality(batch, self._inputs).to(self._device),
+                'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
+                'variable_weights': self.params["VARIABLE_WEIGHT"]
+            }
+            loss, _ = self._criterion(loss_function_params)
+
+        # Log a random position
+        idx = np.arange(n)
+        output = self._model.extract_branch(torch.stack(branches[0:4]), directions)
+        error = torch.abs(output - extract_modality(batch, self._targets).cuda())
+
+        logs = {f'{prefix}direction': directions[idx].cpu().numpy(),
+                f'{prefix}inputs': extract_modality(batch, self._inputs)[idx].cpu().numpy(),
+                f'{prefix}predictions': output[idx].cpu().numpy(),
+                f'{prefix}groundTruth': extract_modality(batch, self._targets)[idx].cpu().numpy(),
+                f'{prefix}error': error[idx].cpu().numpy().tolist(),}
+        imgs = []
+        for i in idx:
+            img = plt.imshow(np.transpose(torch.squeeze(batch['rgb'][i]).numpy(), [1, 2, 0]))
+            plt.title(f"direction: {logs[f'{prefix}direction'][i][0]}\n"
+                      f"gt: {np.array2string(logs[f'{prefix}groundTruth'][i], precision=3, floatmode='fixed')}\n"
+                      f"pred: {np.array2string(logs[f'{prefix}predictions'][i], precision=3, floatmode='fixed')}")
+            imgs.append(wandb.Image(img))
+            plt.close()
+        logs[f'{prefix}img'] = imgs
+        return logs
+
     def eval_step(self, batch):
         self._model.eval()
         with torch.no_grad():
