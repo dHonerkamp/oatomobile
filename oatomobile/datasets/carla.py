@@ -176,22 +176,15 @@ class CARLADataset(Dataset):
 
         # Appends `mode` attribute where `{0: FORWARD, 1: STOP, 2: TURN}`.
         if mode and "player_future" in sample:
-            plan = sample["player_future"]
-            x_T, y_T = plan[-1, :2]
-            # Norm of the vector (x_T, y_T).
-            norm = np.linalg.norm([x_T, y_T])
-            # Angle of vector (0, 0) -> (x_T, y_T).
-            theta = np.degrees(np.arccos(x_T / (norm + 1e-3)))
-            if norm < 3:  # STOP
-                sample["mode"] = 1
-            elif theta > 15:  # LEFT
-                sample["mode"] = 2
-            elif theta <= -15:  # RIGHT
-                sample["mode"] = 3
-            else:  # FORWARD
-                sample["mode"] = 0
-            sample["mode"] = np.atleast_1d(sample["mode"])
-            sample["mode"] = sample["mode"].astype(dtype)
+            sample["mode"] = get_direction_command(sample["player_future"])
+
+        # rename to same as coil uses
+        sample["rgb"] = sample.pop("front_camera_rgb")
+        sample["directions"] = sample.pop("mode")
+        # velocity is 3D, i.e. in xyz direction -> assume CIL speed is the length of this vector
+        sample["speed_module"] = np.array([np.linalg.norm(sample["velocity"])])
+        # for i, name in enumerate(["throttle", "steer", "brake"]):
+        #     sample[name] = np.array(sample["control"][i])
 
         # Records the path to the sample.
         sample["name"] = fname

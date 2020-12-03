@@ -50,12 +50,12 @@ flags.DEFINE_bool(
 flags.DEFINE_string(
     name="dataset_dir",
     # default=str(project_root / "logs" / "oxford" / "processed"),
-    default=str(project_root / "logs" / "data_test_v2" / "Town01_busyV0_ClearNoon" / "20201123_153932" / "carla_dataset"),
+    default=str(project_root / "logs" / "data_noCrashTrain_v3" / "combined" / "carla_dataset"),
     help="The full path to the processed dataset.",
 )
 flags.DEFINE_string(
     name="output_dir",
-    default=str(Path("blub") / "logs" / "cil" / "oxford"),
+    default=str(Path("blub") / "logs" / "cil" / "data_noCrashTrain_v3"),
     help="The full path to the output directory (for logs, ckpts).",
 )
 flags.DEFINE_integer(
@@ -68,31 +68,31 @@ flags.DEFINE_integer(
     default=None,
     help="The number of training epochs for the neural network.",
 )
-flags.DEFINE_integer(
-    name="save_model_frequency",
-    default=4,
-    help="The number epochs between saves of the model.",
-)
-flags.DEFINE_float(
-    name="learning_rate",
-    default=1e-3,
-    help="The ADAM learning rate.",
-)
-flags.DEFINE_integer(
-    name="num_timesteps_to_keep",
-    default=4,
-    help="The numbers of time-steps to keep from the target, with downsampling.",
-)
-flags.DEFINE_float(
-    name="weight_decay",
-    default=0.0,
-    help="The L2 penalty (regularization) coefficient.",
-)
-flags.DEFINE_bool(
-    name="clip_gradients",
-    default=False,
-    help="If True it clips the gradients norm to 1.0.",
-)
+# flags.DEFINE_integer(
+#     name="save_model_frequency",
+#     default=4,
+#     help="The number epochs between saves of the model.",
+# )
+# flags.DEFINE_float(
+#     name="learning_rate",
+#     default=1e-3,
+#     help="The ADAM learning rate.",
+# )
+# flags.DEFINE_integer(
+#     name="num_timesteps_to_keep",
+#     default=4,
+#     help="The numbers of time-steps to keep from the target, with downsampling.",
+# )
+# flags.DEFINE_float(
+#     name="weight_decay",
+#     default=0.0,
+#     help="The L2 penalty (regularization) coefficient.",
+# )
+# flags.DEFINE_bool(
+#     name="clip_gradients",
+#     default=False,
+#     help="If True it clips the gradients norm to 1.0.",
+# )
 flags.DEFINE_integer(
     name="num_workers",
     default=1,
@@ -168,11 +168,11 @@ def main(argv):
     output_dir = FLAGS.output_dir
     batch_size = FLAGS.batch_size
     num_epochs = FLAGS.num_epochs
-    learning_rate = FLAGS.learning_rate
-    save_model_frequency = FLAGS.save_model_frequency
-    num_timesteps_to_keep = FLAGS.num_timesteps_to_keep
-    weight_decay = FLAGS.weight_decay
-    clip_gradients = FLAGS.clip_gradients
+    # learning_rate = FLAGS.learning_rate
+    # save_model_frequency = FLAGS.save_model_frequency
+    # num_timesteps_to_keep = FLAGS.num_timesteps_to_keep
+    # weight_decay = FLAGS.weight_decay
+    # clip_gradients = FLAGS.clip_gradients
     num_workers = FLAGS.num_workers
 
     # Determines device, accelerator.

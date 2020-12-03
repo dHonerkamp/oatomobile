@@ -104,9 +104,7 @@ class MapillaryDataset(CARLADataset):
                 sequence = episode.fetch()
                 n = len(sequence)
                 if verbose:
-                    print("Folder: {}".format(episode_token))
-                    print("Sequence tokens: {}".format(n))
-
+                    print("Sequence tokens: {}, folder: {}".format(n, episode_token))
                 if n < delete_shorter_than:
                     print("Deleting because shorter than {}".format(delete_shorter_than))
                     assert os.path.exists(episode_token)
@@ -116,6 +114,13 @@ class MapillaryDataset(CARLADataset):
             except Exception as e:
                 if verbose:
                     print("Skipping folder {}: {}".format(episode_token, e))
+                parent_dir = os.path.abspath(os.path.join(episode_token, os.pardir))
+                parent_parent_dir = os.path.abspath(os.path.join(parent_dir, os.pardir))
+                to_check = [episode_token, parent_dir, parent_parent_dir]
+                for dir in to_check:
+                    if not os.listdir(dir):
+                        print("Removing empty dir {}".format(dir))
+                        shutil.rmtree(dir)
                 stats[episode_token] = 0
                 continue
         return stats

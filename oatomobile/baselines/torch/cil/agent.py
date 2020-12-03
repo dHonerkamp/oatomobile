@@ -23,6 +23,7 @@ import torch
 import oatomobile
 from oatomobile.baselines.base import SetPointAgent
 from oatomobile.baselines.torch.cil.model import BehaviouralModel
+from oatomobile.datasets.carla import DirectionsEnum, get_direction_command
 
 
 class CILAgent(SetPointAgent):
@@ -61,18 +62,7 @@ class CILAgent(SetPointAgent):
     # Convert image to CHW.
     observation["lidar"] = np.transpose(observation["lidar"], (0, 3, 1, 2))
     # Calculates `command` -- borrowed from `CARLADataset.mode`
-    _x_T, _y_T = observation["goal"][0, -1, :2]
-    _norm = np.linalg.norm([_x_T, _y_T])
-    _theta = np.degrees(np.arccos(_x_T / (_norm + 1e-3)))
-    if _norm < 3:  # STOP
-      observation["mode"] = 1
-    elif _theta > 15:  # LEFT
-      observation["mode"] = 2
-    elif _theta <= 15:  # RIGHT
-      observation["mode"] = 3
-    else:  # FORWARD
-      observation["mode"] = 0
-    observation["mode"] = np.atleast_2d(observation["mode"])
+    observation["mode"] = np.atleast_2d(get_direction_command(observation["goal"][0]))
     observation["mode"] = observation["mode"].astype(observation["goal"].dtype)
     # Processes observations for the `BehaviouralModel`.
     observation = {

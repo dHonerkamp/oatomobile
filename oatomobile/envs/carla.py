@@ -133,7 +133,8 @@ class CARLANavEnv(CARLAEnv):
       sensors: Sequence[str] = defaults.CARLA_SENSORS,
       num_vehicles: int = 0,
       num_pedestrians: int = 0,
-      proximity_destination_threshold: float = 7.5) -> None:
+      proximity_destination_threshold: float = 7.5,
+      weather: carla.WeatherParameters = carla.WeatherParameters.ClearNoon) -> None:
     """Constructs a CARLA simulator-based OpenAI gym-compatible environment.
 
     Args:
@@ -161,6 +162,7 @@ class CARLANavEnv(CARLAEnv):
         sensors=sensors,
         num_vehicles=num_vehicles,
         num_pedestrians=num_pedestrians,
+        weather=weather
     )
     # Internalize hyperparameters.
     self._proximity_destination_threshold = proximity_destination_threshold

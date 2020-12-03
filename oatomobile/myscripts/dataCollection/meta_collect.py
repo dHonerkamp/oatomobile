@@ -94,7 +94,7 @@ def main():
                         # os.removedirs("blub")
 
                         s = random.randint(min_steps_per_episode, max_steps_per_episode)
-                        curr = cmd.format(num_steps=min(remaining_steps, s),
+                        curr = cmd.format(num_steps=min(max(remaining_steps, delete_below_length), s),
                                           logdir=logdir,
                                           weather=weather,
                                           town=town,

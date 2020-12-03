@@ -68,7 +68,8 @@ def main(town: str, weather: WeatherParameters, nepisodes, occupancy: str, num_s
                   # added by me
                   "front_camera_rgb",
                   # "front_camera_depth", -> get from semantic lidar
-                  "semantic_lidar"
+                  "semantic_lidar",
+                  "goal"
               )
 
     for e in range(nepisodes):
