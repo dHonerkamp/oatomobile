@@ -40,11 +40,16 @@ class DirectionsEnum(IntEnum):
     # TURN_LEFT = 3
     # LANE_FOLLOW = 2
     # oatomobile values:
-    GO_STRAIGHT = 0
-    STOP = 1
+    # GO_STRAIGHT = 0
+    # STOP = 1
+    # TURN_LEFT = 2
+    # TURN_RIGHT = 3
+    # coiltraine adapted
+    LANE_FOLLOW = 0
+    GO_STRAIGHT = 1
     TURN_LEFT = 2
     TURN_RIGHT = 3
-
+    # REACH_GOAL = 4
 
 def get_direction_command(plan):
     x_T, y_T = plan[-1, :2]

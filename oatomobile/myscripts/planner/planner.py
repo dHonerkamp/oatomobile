@@ -6,30 +6,14 @@
 
 import collections
 import numpy as np
-from enum import IntEnum
+
+from oatomobile.datasets.carla import DirectionsEnum
 
 from . import city_track
 from .city_track import sldist
 
 def compare(x, y):
     return collections.Counter(x) == collections.Counter(y)
-
-
-# TODO: use same command definitions as in oatomobile/baselines/torch/cil/agent.py
-from oatomobile.datasets.carla import DirectionsEnum
-class DirectionsEnumCoilTraine(IntEnum):
-    # coiltrane original values:
-    # REACH_GOAL = 0
-    # GO_STRAIGHT = 5
-    # TURN_RIGHT = 4
-    # TURN_LEFT = 3
-    # LANE_FOLLOW = 2
-    # adapted values
-    LANE_FOLLOW = 0
-    GO_STRAIGHT = 1
-    TURN_LEFT = 2
-    TURN_RIGHT = 3
-    REACH_GOAL = 4
 
 
 # Auxiliary algebra function
@@ -46,19 +30,16 @@ class Planner(object):
         self._city_track = city_track.CityTrack(city_name)
         self._commands = []
 
-    def get_directions(self, current_point, end_point):
+    def get_directions(self, current_point_x, current_point_y, current_point_z, end_point_x, end_point_y, end_point_z):
         """
         Class that should return the directions to reach a certain goal
         """
 
         directions = self.get_next_command(
-            (current_point.location.x,
-             current_point.location.y, 0.22),
-            (current_point.orientation.x,
-             current_point.orientation.y,
-             current_point.orientation.z),
-            (end_point.location.x, end_point.location.y, 0.22),
-            (end_point.orientation.x, end_point.orientation.y, end_point.orientation.z))
+            (current_point_x, current_point_y, 0.22),
+            (current_point_x, current_point_y, current_point_z),
+            (end_point_x, end_point_y, 0.22),
+            (end_point_x, end_point_y, end_point_z))
         return directions
 
     def get_next_command(self, source, source_ori, target, target_ori):
@@ -75,8 +56,8 @@ class Planner(object):
         track_source = self._city_track.project_node(source)
         track_target = self._city_track.project_node(target)
 
-        if self._city_track.is_at_goal(track_source, track_target):
-            return DirectionsEnumCoilTraine.REACH_GOAL
+        # if self._city_track.is_at_goal(track_source, track_target):
+        #     return DirectionsEnum.REACH_GOAL
 
         if (self._city_track.is_at_new_node(track_source)
             and self._city_track.is_away_from_intersection(track_source)):
@@ -86,11 +67,11 @@ class Planner(object):
             self._commands = self._route_to_commands(route)
 
         if self._city_track.is_far_away_from_route_intersection(track_source):
-            return DirectionsEnumCoilTraine.LANE_FOLLOW
+            return DirectionsEnum.LANE_FOLLOW
         if self._commands:
             return self._commands[0]
         else:
-            return DirectionsEnumCoilTraine.LANE_FOLLOW
+            return DirectionsEnum.LANE_FOLLOW
 
     def get_shortest_path_distance(
             self,
@@ -151,11 +132,11 @@ class Planner(object):
             angle = signal(current_to_future, past_to_current)
 
             if angle < -0.1:
-                command = DirectionsEnumCoilTraine.TURN_RIGHT
+                command = DirectionsEnum.TURN_RIGHT
             elif angle > 0.1:
-                command = DirectionsEnumCoilTraine.TURN_LEFT
+                command = DirectionsEnum.TURN_LEFT
             else:
-                command = DirectionsEnumCoilTraine.GO_STRAIGHT
+                command = DirectionsEnum.GO_STRAIGHT
 
             commands_list.append(command)
 

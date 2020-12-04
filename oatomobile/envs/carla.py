@@ -35,6 +35,9 @@ from oatomobile.simulators.carla.simulator import CARLAAction
 from oatomobile.simulators.carla.simulator import CARLASimulator
 from oatomobile.utils import carla as cutil
 
+from oatomobile.myscripts.planner import Planner
+from oatomobile.myscripts.planner.city_track import sldist
+
 
 class CARLAEnv(Env):
     """A CARLA simulator-based OpenAI gym-compatible environment."""
@@ -127,13 +130,13 @@ class CARLANavEnv(CARLAEnv):
             self,
             *,
             town: str,
-            origin: Union[int, carla.Location],  # pylint: disable=no-member
+            spawn_point: Union[int, carla.Location],  # pylint: disable=no-member
             destination: Union[int, carla.Location],  # pylint: disable=no-member
             fps: int = defaults.SIMULATOR_FPS,
             sensors: Sequence[str] = defaults.CARLA_SENSORS,
             num_vehicles: int = 0,
             num_pedestrians: int = 0,
-            proximity_destination_threshold: float = 7.5,
+            proximity_destination_threshold: float = 2.0,
             weather: carla.WeatherParameters = carla.WeatherParameters.ClearNoon) -> None:
         """Constructs a CARLA simulator-based OpenAI gym-compatible environment.
 
@@ -156,7 +159,7 @@ class CARLANavEnv(CARLAEnv):
         """
         super(CARLANavEnv, self).__init__(
             town=town,
-            spawn_point=origin,
+            spawn_point=spawn_point,
             destination=destination,
             fps=fps,
             sensors=sensors,
@@ -167,24 +170,35 @@ class CARLANavEnv(CARLAEnv):
         # Internalize hyperparameters.
         self._proximity_destination_threshold = proximity_destination_threshold
 
+        # CIL planner
+        assert town in ["Town01", "Town02"]
+        self._planner = Planner(town)
+
+    def reset(self, *args: Any, **kwargs: Any) -> Observations:
+        observation = super(CARLANavEnv, self).reset(*args, **kwargs)
+        destination = self.simulator.destination
+        current_location = observation["location"]
+        next_direction = self._planner.get_directions(current_location[0], current_location[1], current_location[2],
+                                                      destination.location.x, destination.location.y, destination.location.z)
+        observation['directions'] = next_direction
+        return observation
+
     def step(self, action: CARLAAction) -> Transition:
         """Makes a step in the simulator, provided an action."""
         observation, reward, done, info = super(CARLANavEnv, self).step(action)
 
+        destination = self.simulator.destination
+        current_location = observation["location"]
+        next_direction = self._planner.get_directions(current_location[0], current_location[1], current_location[2],
+                                                      destination.location.x, destination.location.y, destination.location.z)
+        observation['directions'] = next_direction
+
         # Get distance from destination.
         if not done:
-            destination = self.simulator.destination
-            current_location = observation["location"]
-            destination_location = np.asarray(
-                [
-                    destination.location.x,
-                    destination.location.y,
-                    destination.location.z,
-                ],
-                dtype=np.float32,
-            )
-            distance_to_go = np.linalg.norm(current_location - destination_location)
-            done = distance_to_go < self._proximity_destination_threshold
+            distance = sldist([current_location[0], current_location[1]],
+                              [destination.location.x, destination.location.y])
+
+            done = distance < self._proximity_destination_threshold
             reward = float(done)
 
         return observation, reward, done, info
