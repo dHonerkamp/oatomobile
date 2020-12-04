@@ -28,90 +28,90 @@ from oatomobile.core.rl import Metric
 
 
 class EnvironmentLoop:
-  """A simple RL-like environment loop.
+    """A simple RL-like environment loop.
 
-  This takes `Env` and `Agent` instances and coordinates their
-  interaction. This can be used as:
+    This takes `Env` and `Agent` instances and coordinates their
+    interaction. This can be used as:
 
-    loop = EnvironmentLoop(environment, agent_fn)
-    loop.run()
-  """
-
-  def __init__(
-      self,
-      agent_fn: Callable[..., Agent],
-      environment: Env,
-      metrics: Optional[Sequence[Metric]] = None,
-      render_mode: str = "none",
-  ) -> None:
-    """Constructs an environment loop.
-
-    Args:
-      agent_fn: The agent's construction function that receives each task.
-      environment: The environment to evaluate on.
-      metrics: Set of metrics to record during episode.
-      render_mode: The render mode, one of {"none", "human", "rgb_array"}.
-    """
-    assert render_mode in ("none", "human", "rgb_array")
-
-    # Internalizes agent and environment.
-    self._agent_fn = agent_fn
-    self._environment = environment
-    self._metrics = metrics
-    self._render_mode = render_mode
-
-  def run(self) -> Optional[Mapping[str, types.Scalar]]:
-    """Perform the run loop.
-
-    Returns:
-      If `metrics` are provided, it returns their final values in a dictionary
-      format.
+      loop = EnvironmentLoop(environment, agent_fn)
+      loop.run()
     """
 
-    # try:
-    # Initializes environment.
-    done = False
-    observation = self._environment.reset()
-    if self._render_mode is not "none":
-      self._environment.render(mode=self._render_mode)
-    # Initializes agent.
-    agent = self._agent_fn(environment=self._environment)
+    def __init__(
+            self,
+            agent_fn: Callable[..., Agent],
+            environment: Env,
+            metrics: Optional[Sequence[Metric]] = None,
+            render_mode: str = "none",
+    ) -> None:
+        """Constructs an environment loop.
 
-    # Episode loop.
-    while not done:
-      # Get vehicle control.
-      action = agent.act(observation)
+        Args:
+          agent_fn: The agent's construction function that receives each task.
+          environment: The environment to evaluate on.
+          metrics: Set of metrics to record during episode.
+          render_mode: The render mode, one of {"none", "human", "rgb_array"}.
+        """
+        assert render_mode in ("none", "human", "rgb_array")
 
-      # Progresses the simulation.
-      new_observation, reward, done, _ = self._environment.step(action)
-      if self._render_mode is not "none":
-        self._environment.render(mode=self._render_mode)
+        # Internalizes agent and environment.
+        self._agent_fn = agent_fn
+        self._environment = environment
+        self._metrics = metrics
+        self._render_mode = render_mode
 
-      # Updates the agent belief.
-      agent.update(observation, action, new_observation)
+    def run(self) -> Optional[Mapping[str, types.Scalar]]:
+        """Perform the run loop.
 
-      # Update metrics.
-      if self._metrics is not None:
-        for metric in self._metrics:
-          metric.update(observation, action, reward, new_observation)
+        Returns:
+          If `metrics` are provided, it returns their final values in a dictionary
+          format.
+        """
 
-      # Book-keeping.
-      observation = new_observation
+        # try:
+        # Initializes environment.
+        done = False
+        observation = self._environment.reset()
+        if self._render_mode is not "none":
+            self._environment.render(mode=self._render_mode)
+        # Initializes agent.
+        agent = self._agent_fn(environment=self._environment)
 
-    # except Exception as msg:
-    #   logging.error(msg)
+        # Episode loop.
+        while not done:
+            # Get vehicle control.
+            action = agent.act(observation)
 
-    # finally:
-    #   # Garbage collector.
-    #   try:
-    self._environment.close()
+            # Progresses the simulation.
+            new_observation, reward, done, _ = self._environment.step(action)
+            if self._render_mode is not "none":
+                self._environment.render(mode=self._render_mode)
+
+            # Updates the agent belief.
+            agent.update(observation, action, new_observation)
+
+            # Update metrics.
+            if self._metrics is not None:
+                for metric in self._metrics:
+                    metric.update(observation, action, reward, new_observation)
+
+            # Book-keeping.
+            observation = new_observation
+
+        # except Exception as msg:
+        #   logging.error(msg)
+
+        # finally:
+        #   # Garbage collector.
+        #   try:
+        self._environment.close()
         # environment.close()
-      # except NameError as e:
-      #   print(e)
-      #   pass
+        # except NameError as e:
+        #   print(e)
+        #   pass
 
-    # Returns the recorded metrics.
-    if self._metrics is not None:
-      return {metric.uuid: metric.value for metric in self._metrics}
-    else:
-      return None
+        # Returns the recorded metrics.
+        if self._metrics is not None:
+            return {metric.uuid: metric.value for metric in self._metrics}
+        else:
+            return None
