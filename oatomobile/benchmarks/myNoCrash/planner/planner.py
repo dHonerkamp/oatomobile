@@ -6,8 +6,8 @@
 
 import collections
 import math
-
 import numpy as np
+from enum import IntEnum
 
 from . import city_track
 
@@ -16,15 +16,16 @@ def compare(x, y):
     return collections.Counter(x) == collections.Counter(y)
 
 
-
-# Constants Used for the high level commands
-
-
-REACH_GOAL = 0.0
-GO_STRAIGHT = 5.0
-TURN_RIGHT = 4.0
-TURN_LEFT = 3.0
-LANE_FOLLOW = 2.0
+# TODO: use same command definitions as in oatomobile/baselines/torch/cil/agent.py
+from oatomobile.datasets.carla import DirectionsEnum
+class DirectionsEnumCoilTraine(IntEnum):
+    # coiltrane original values:
+    # TODO: adapt into 0-4 range
+    REACH_GOAL = 0
+    GO_STRAIGHT = 5
+    TURN_RIGHT = 4
+    TURN_LEFT = 3
+    LANE_FOLLOW = 2
 
 
 # Auxiliary algebra function
@@ -40,11 +41,8 @@ def signal(v1, v2):
 
 
 class Planner(object):
-
     def __init__(self, city_name):
-
         self._city_track = city_track.CityTrack(city_name)
-
         self._commands = []
 
     def get_next_command(self, source, source_ori, target, target_ori):
@@ -58,43 +56,36 @@ class Planner(object):
         Returns
             a command ( Straight,Lane Follow, Left or Right)
         """
-
         track_source = self._city_track.project_node(source)
         track_target = self._city_track.project_node(target)
 
-        # reach the goal
-
         if self._city_track.is_at_goal(track_source, track_target):
-            return REACH_GOAL
-
+            return DirectionsEnumCoilTraine.REACH_GOAL
 
         if (self._city_track.is_at_new_node(track_source)
-                and self._city_track.is_away_from_intersection(track_source)):
+            and self._city_track.is_away_from_intersection(track_source)):
 
             route = self._city_track.compute_route(track_source, source_ori,
                                                    track_target, target_ori)
 
             self._commands = self._route_to_commands(route)
 
-            if self._city_track.is_far_away_from_route_intersection(
-                    track_source):
-                return LANE_FOLLOW
+            if self._city_track.is_far_away_from_route_intersection(track_source):
+                return DirectionsEnumCoilTraine.LANE_FOLLOW
             else:
                 if self._commands:
                     return self._commands[0]
                 else:
-                    return LANE_FOLLOW
+                    return DirectionsEnumCoilTraine.LANE_FOLLOW
         else:
-
-            if self._city_track.is_far_away_from_route_intersection(
-                    track_source):
-                return LANE_FOLLOW
+            if self._city_track.is_far_away_from_route_intersection(track_source):
+                return DirectionsEnumCoilTraine.LANE_FOLLOW
 
             # If there are computed commands
             if self._commands:
                 return self._commands[0]
             else:
-                return LANE_FOLLOW
+                return DirectionsEnumCoilTraine.LANE_FOLLOW
 
     def get_shortest_path_distance(
             self,
@@ -121,21 +112,15 @@ class Planner(object):
 
         # We multiply by these values to convert distance to world coordinates
 
-        return distance * float(self._city_track.get_pixel_density()) \
-               * float(self._city_track.get_node_density())
+        return distance * float(self._city_track.get_pixel_density()) * float(self._city_track.get_node_density())
 
     def is_there_posible_route(self, source, source_ori, target, target_ori):
-
         track_source = self._city_track.project_node(source)
         track_target = self._city_track.project_node(target)
-
-        return not self._city_track.compute_route(
-            track_source, source_ori, track_target, target_ori) is None
+        return not self._city_track.compute_route(track_source, source_ori, track_target, target_ori) is None
 
     def test_position(self, source):
-
         node_source = self._city_track.project_node(source)
-
         return self._city_track.is_away_from_intersection(node_source)
 
     def _route_to_commands(self, route):
@@ -146,7 +131,6 @@ class Planner(object):
         :param route: the sub graph containing the shortest path
         :return: list of commands encoded from 0-5
         """
-
         commands_list = []
 
         for i in range(0, len(route)):
@@ -164,11 +148,11 @@ class Planner(object):
             angle = signal(current_to_future, past_to_current)
 
             if angle < -0.1:
-                command = TURN_RIGHT
+                command = DirectionsEnumCoilTraine.TURN_RIGHT
             elif angle > 0.1:
-                command = TURN_LEFT
+                command = DirectionsEnumCoilTraine.TURN_LEFT
             else:
-                command = GO_STRAIGHT
+                command = DirectionsEnumCoilTraine.GO_STRAIGHT
 
             commands_list.append(command)
 
