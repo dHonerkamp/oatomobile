@@ -1,4 +1,3 @@
-# Copyright 2020 The OATomobile Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,13 +17,7 @@ import glob
 import os
 import sys
 import zipfile
-from typing import Any
-from typing import Callable
-from typing import Generator
-from typing import Mapping
-from typing import Optional
-from typing import Sequence
-from typing import Union
+from typing import Any, Callable, Generator, Mapping, Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -235,14 +228,14 @@ class CARLADataset(Dataset):
         from oatomobile.core.loop import EnvironmentLoop
         from oatomobile.core.rl import FiniteHorizonWrapper
         from oatomobile.core.rl import SaveToDiskWrapper, MonitorWrapper
-        from oatomobile.envs.carla import CARLAEnv
+        from oatomobile.envs.carla import CARLAEnv, CARLANavEnv
         from oatomobile.envs.carla import TerminateOnCollisionWrapper
 
         # Storage area.
         os.makedirs(output_dir, exist_ok=True)
 
         # Initializes a CARLA environment.
-        env = CARLAEnv(
+        env = CARLANavEnv(
             town=town,
             sensors=sensors,
             spawn_point=spawn_point,
@@ -341,12 +334,15 @@ class CARLADataset(Dataset):
                         world_locations=player_future,
                     )
 
+                    direction_cmd = get_direction_command(player_future)
+
                     # Store to ouput directory.
                     np.savez_compressed(
                         os.path.join(output_dir, "{}.npz".format(sequence[i])),
                         **observation,
                         player_future=player_future,
                         player_past=player_past,
+                        direction_cmd=direction_cmd
                     )
 
                 except Exception as e:

@@ -9,7 +9,7 @@ import numpy as np
 from enum import IntEnum
 
 from . import city_track
-from oatomobile.benchmarks.myNoCrash.planner.city_track import sldist
+from .city_track import sldist
 
 def compare(x, y):
     return collections.Counter(x) == collections.Counter(y)

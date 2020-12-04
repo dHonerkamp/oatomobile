@@ -6,8 +6,8 @@
 import numpy as np
 import math
 
-from oatomobile.benchmarks.myNoCrash.planner.astar import AStar
-from oatomobile.benchmarks.myNoCrash.planner.map import CarlaMap
+from .astar import AStar
+from .map import CarlaMap
 
 
 def sldist(c1, c2): return math.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
