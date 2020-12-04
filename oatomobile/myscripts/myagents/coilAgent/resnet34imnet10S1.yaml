@@ -13,6 +13,7 @@ MEASUREMENTS:
 BATCH_SIZE: 120
 NUMBER_ITERATIONS: 100000
 #TARGETS: ['steer', 'throttle', 'brake']  # From the float data, the ones that the network should estimate
+# 'control' = ['throttle', 'steer', 'brake']
 TARGETS: ['control']  # From the float data, the ones that the network should estimate
 NTARGETS: 3  # number of elements in 'TARGETS'
 INPUTS: ['speed_module'] # From the float data, the ones that are input to the neural network
@@ -67,10 +68,11 @@ LEARNING_RATE_DECAY_LEVEL: 0.1 # Th factor of reduction applied to the learning 
 # Loss Parameters #
 BRANCH_LOSS_WEIGHT: [0.95, 0.95, 0.95, 0.95, 0.05] # how much each branch is weighted when computing loss
 LOSS_FUNCTION: 'L1' # The loss function used
-VARIABLE_WEIGHT: # how much each of the outputs specified on TARGETS are weighted for learning.
-  Steer: 0.5
-  Gas: 0.45
-  Brake: 0.05
+#VARIABLE_WEIGHT: # how much each of the outputs specified on TARGETS are weighted for learning.
+#  Steer: 0.5
+#  Gas: 0.45
+#  Brake: 0.05
+VARIABLE_WEIGHT: [0.45, 0.5, 0.05]
 
 
 #### Simulation Related Parameters ####

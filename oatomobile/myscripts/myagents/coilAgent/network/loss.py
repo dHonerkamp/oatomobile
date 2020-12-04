@@ -43,21 +43,17 @@ def branched_loss(loss_function, params):
 
     # Apply the variable weights
     # This is applied to all branches except the last one, that is the speed branch...
-    # TODO This is hardcoded to  have 4 branches not using speed.
-
-    for i in range(4):
-        loss_branches_vec[i] = loss_branches_vec[i][:, 0] * params['variable_weights']['Steer'] \
-                               + loss_branches_vec[i][:, 1] * params['variable_weights']['Gas'] \
-                               + loss_branches_vec[i][:, 2] * params['variable_weights']['Brake']
-
-    loss_function = loss_branches_vec[0] + loss_branches_vec[1] + loss_branches_vec[2] + \
-                    loss_branches_vec[3]
-
-    speed_loss = loss_branches_vec[4]/(params['branches'][0].shape[0])
-
-    return torch.sum(loss_function) / (params['branches'][0].shape[0])\
-                + torch.sum(speed_loss) / (params['branches'][0].shape[0]),\
-           plotable_params
+    loss = 0
+    for i in range(params['number_of_branches']):
+        loss_branches_vec[i] = loss_branches_vec[i][:, 0] * params['variable_weights'][0] \
+                               + loss_branches_vec[i][:, 1] * params['variable_weights'][1] \
+                               + loss_branches_vec[i][:, 2] * params['variable_weights'][2]
+        loss += loss_branches_vec[i]
+    # speed loss
+    n = params['branches'][0].shape[0]
+    # TODO DANIEL: BUG?? DIVIDING speed_loss BY n TWICE??!
+    speed_loss = loss_branches_vec[params['number_of_branches']] / n
+    return (torch.sum(loss) / n + torch.sum(speed_loss) / n), plotable_params
 
 
 def Loss(loss_name):
@@ -69,13 +65,9 @@ def Loss(loss_name):
     # TODO: this could be extended to some more arbitrary definition
 
     if loss_name == 'L1':
-
         return l1
-
     elif loss_name == 'L2':
-
         return l2
-
     else:
         raise ValueError(" Not found Loss name")
 

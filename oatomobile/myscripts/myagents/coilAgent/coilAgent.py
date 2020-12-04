@@ -115,13 +115,15 @@ class CoilAgent(BaseAgent):
                 'directions': directions.to(self._device),
                 'inputs': extract_modality(batch, self._inputs).to(self._device),
                 'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
-                'variable_weights': self.params["VARIABLE_WEIGHT"]
+                'variable_weights': self.params["VARIABLE_WEIGHT"],
+                'number_of_branches': self.params['MODEL_CONFIGURATION']['branches']["number_of_branches"]
             }
             loss, _ = self._criterion(loss_function_params)
 
         # Log a random position
         idx = np.arange(n)
-        output = self._model.extract_branch(torch.stack(branches[0:4]), directions)
+        # TODO: does not include the speed branch
+        output = self._model.extract_branch(torch.stack(branches[0:self.params['MODEL_CONFIGURATION']['branches']["number_of_branches"]]), directions)
         error = torch.abs(output - extract_modality(batch, self._targets).cuda())
 
         logs = {f'{prefix}direction': directions[idx].cpu().numpy(),
@@ -134,7 +136,7 @@ class CoilAgent(BaseAgent):
             img = plt.imshow(np.transpose(torch.squeeze(batch['rgb'][i]).numpy(), [1, 2, 0]))
             plt.title(f"direction: {logs[f'{prefix}direction'][i][0]}\n"
                       f"gt: {np.array2string(logs[f'{prefix}groundTruth'][i], precision=3, floatmode='fixed')}\n"
-                      f"pred: {np.array2string(logs[f'{prefix}predictions'][i], precision=3, floatmode='fixed')}")
+                      f"pred: {np.array2string(logs[f'{prefix}predictions'][i], precision=3, floatmode='fixed', suppress_small=True)}")
             imgs.append(wandb.Image(img))
             plt.close()
         logs[f'{prefix}img'] = imgs
@@ -154,7 +156,8 @@ class CoilAgent(BaseAgent):
                 'directions': directions.to(self._device),
                 'inputs': extract_modality(batch, self._inputs).to(self._device),
                 'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
-                'variable_weights': self.params["VARIABLE_WEIGHT"]
+                'variable_weights': self.params["VARIABLE_WEIGHT"],
+                'number_of_branches': self.params['MODEL_CONFIGURATION']['branches']["number_of_branches"]
             }
             loss, _ = self._criterion(loss_function_params)
 
@@ -189,7 +192,8 @@ class CoilAgent(BaseAgent):
             'directions': directions.to(self._device),
             'inputs': extract_modality(batch, self._inputs).to(self._device),
             'branch_weights': self.params["BRANCH_LOSS_WEIGHT"],
-            'variable_weights': self.params["VARIABLE_WEIGHT"]
+            'variable_weights': self.params["VARIABLE_WEIGHT"],
+            'number_of_branches': self.params['MODEL_CONFIGURATION']['branches']["number_of_branches"]
         }
         loss, _ = self._criterion(loss_function_params)
         loss.backward()
@@ -212,9 +216,6 @@ class CoilAgent(BaseAgent):
         metrics = {'loss': loss.data,
                    # 'image': torch.squeeze(batch['rgb']),
                    }
-
-
-
 
         # TODO: used for their weird lr schedule
         # loss_window.append(loss.data.tolist())

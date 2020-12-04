@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import importlib
 
-from oatomobile.myscripts.myagents.coilAgent.coilutils import command_number_to_index
+# from oatomobile.myscripts.myagents.coilAgent.coilutils import command_number_to_index
 
 from .building_blocks import Conv
 from .building_blocks import Branching
@@ -144,8 +144,7 @@ class CoILICRA(nn.Module):
         return self.perception.get_layers_features(x)
 
     def extract_branch(self, output_vec, branch_number):
-
-        branch_number = command_number_to_index(branch_number)
+        # branch_number = command_number_to_index(branch_number)
 
         if len(branch_number) > 1:
             branch_number = torch.squeeze(branch_number.type(torch.cuda.LongTensor))

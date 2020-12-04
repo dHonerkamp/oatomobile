@@ -129,7 +129,7 @@ def train_epoch(
             metrics = agent.train_step(batch)
             # Performs a gradien-descent step.
             loss += metrics['loss']
-            pbar.set_description("train-loss: {:.3f}".format(loss / i))
+            pbar.set_description("t {}/train-loss: {:.5f}".format(step, loss / (i + 1)))
     mean_loss = loss / len(dataloader)
     # TODO: log the mean of all metrics, not just loss
     wandb.log({'train/loss': mean_loss}, step)
@@ -149,12 +149,12 @@ def evaluate_epoch(
                 # Accumulates loss in dataset.
                 metrics = agent.eval_step(batch)
                 loss += metrics['loss']
-                pbar.set_description("val-loss: {:.3f}".format(loss / i))
+                pbar.set_description("val-loss: {:.5f}".format(loss / (i + 1)))
     mean_loss = loss / len(dataloader)
 
     logs = agent.log_example(batch, prefix='val/')
     logs['val/loss'] = mean_loss
-    wandb.log(logs, step, commit=True)
+    wandb.log(logs, step)
     return mean_loss
 
 def main(argv):
@@ -239,17 +239,16 @@ def main(argv):
         num_workers=num_workers,
     )
 
+    step = 0
     with tqdm.tqdm(range(num_epochs)) as pbar_epoch:
         for epoch in pbar_epoch:
-            step = len(dataloader_train) * epoch
-
             # Evaluates model on whole validation dataset, and writes on `TensorBoard`.
             evaluate_epoch(agent, dataloader_val, step)
 
+            step = len(dataloader_train) * (1 + epoch)
+
             # Trains model on whole training dataset, and writes on `TensorBoard`.
             train_epoch(agent, dataloader_train, step)
-
-
 
             # Checkpoints model weights.
             # if epoch % save_model_frequency == 0:
