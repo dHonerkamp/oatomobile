@@ -19,12 +19,17 @@ def compare(x, y):
 from oatomobile.datasets.carla import DirectionsEnum
 class DirectionsEnumCoilTraine(IntEnum):
     # coiltrane original values:
-    # TODO: adapt into 0-4 range
-    REACH_GOAL = 0
-    GO_STRAIGHT = 5
-    TURN_RIGHT = 4
-    TURN_LEFT = 3
-    LANE_FOLLOW = 2
+    # REACH_GOAL = 0
+    # GO_STRAIGHT = 5
+    # TURN_RIGHT = 4
+    # TURN_LEFT = 3
+    # LANE_FOLLOW = 2
+    # adapted values
+    LANE_FOLLOW = 0
+    GO_STRAIGHT = 1
+    TURN_LEFT = 2
+    TURN_RIGHT = 3
+    REACH_GOAL = 4
 
 
 # Auxiliary algebra function
@@ -40,6 +45,21 @@ class Planner(object):
     def __init__(self, city_name):
         self._city_track = city_track.CityTrack(city_name)
         self._commands = []
+
+    def get_directions(self, current_point, end_point):
+        """
+        Class that should return the directions to reach a certain goal
+        """
+
+        directions = self.get_next_command(
+            (current_point.location.x,
+             current_point.location.y, 0.22),
+            (current_point.orientation.x,
+             current_point.orientation.y,
+             current_point.orientation.z),
+            (end_point.location.x, end_point.location.y, 0.22),
+            (end_point.orientation.x, end_point.orientation.y, end_point.orientation.z))
+        return directions
 
     def get_next_command(self, source, source_ori, target, target_ori):
         """
