@@ -63,25 +63,14 @@ class Planner(object):
 
             route = self._city_track.compute_route(track_source, source_ori,
                                                    track_target, target_ori)
-
             self._commands = self._route_to_commands(route)
 
-            if self._city_track.is_far_away_from_route_intersection(track_source):
-                return DirectionsEnumCoilTraine.LANE_FOLLOW
-            else:
-                if self._commands:
-                    return self._commands[0]
-                else:
-                    return DirectionsEnumCoilTraine.LANE_FOLLOW
+        if self._city_track.is_far_away_from_route_intersection(track_source):
+            return DirectionsEnumCoilTraine.LANE_FOLLOW
+        if self._commands:
+            return self._commands[0]
         else:
-            if self._city_track.is_far_away_from_route_intersection(track_source):
-                return DirectionsEnumCoilTraine.LANE_FOLLOW
-
-            # If there are computed commands
-            if self._commands:
-                return self._commands[0]
-            else:
-                return DirectionsEnumCoilTraine.LANE_FOLLOW
+            return DirectionsEnumCoilTraine.LANE_FOLLOW
 
     def get_shortest_path_distance(
             self,
@@ -107,7 +96,6 @@ class Planner(object):
             current_pos = node_iter
 
         # We multiply by these values to convert distance to world coordinates
-
         return distance * float(self._city_track.get_pixel_density()) * float(self._city_track.get_node_density())
 
     def is_there_posible_route(self, source, source_ori, target, target_ori):
