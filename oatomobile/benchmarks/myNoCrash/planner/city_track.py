@@ -4,11 +4,13 @@
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
 import numpy as np
+import math
 
-from carla08.planner.graph import sldist
+from oatomobile.benchmarks.myNoCrash.planner.astar import AStar
+from oatomobile.benchmarks.myNoCrash.planner.map import CarlaMap
 
-from carla08.planner.astar import AStar
-from carla08.planner.map import CarlaMap
+
+def sldist(c1, c2): return math.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
 
 
 class CityTrack(object):

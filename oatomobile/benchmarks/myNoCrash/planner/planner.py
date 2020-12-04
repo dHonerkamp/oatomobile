@@ -5,12 +5,11 @@
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
 import collections
-import math
 import numpy as np
 from enum import IntEnum
 
 from . import city_track
-
+from oatomobile.benchmarks.myNoCrash.planner.city_track import sldist
 
 def compare(x, y):
     return collections.Counter(x) == collections.Counter(y)
@@ -31,9 +30,6 @@ class DirectionsEnumCoilTraine(IntEnum):
 # Auxiliary algebra function
 def angle_between(v1, v2):
     return np.arccos(np.dot(v1, v2) / np.linalg.norm(v1) / np.linalg.norm(v2))
-
-
-def sldist(c1, c2): return math.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
 
 
 def signal(v1, v2):
@@ -124,7 +120,6 @@ class Planner(object):
         return self._city_track.is_away_from_intersection(node_source)
 
     def _route_to_commands(self, route):
-
         """
         from the shortest path graph, transform it into a list of commands
 
